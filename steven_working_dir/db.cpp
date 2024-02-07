@@ -6,7 +6,7 @@
 #include <memory>
 // Include the Table class header
 #include "table.hpp"   // Forward declaration to resolve circular dependency
-#include "../../msys64/ucrt64/include/c++/13.1.0/bits/algorithmfwd.h"
+#include <bits/stdc++.h>
 
 class Database {
 private:
