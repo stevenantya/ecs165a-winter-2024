@@ -34,3 +34,28 @@ void Table::display() {
     }
 }
 
+int Table::parseBasePageRID(std::string rid) {
+    int base_page_idx = std::stoi(rid.substr(0, rid.find(":")));
+    return base_page_idx;
+}
+
+int Table::parseRecordRID(std::string rid) {
+    int record_idx = std::stoi(rid.substr(rid.find(":") + 1));
+    return record_idx;
+}
+
+int64_t* Table::getRecord(std::string rid) {
+
+    // "base_page_idx:record_idx. For instance 123:456"
+    int base_page_idx = parseBasePageRID(rid);
+    int record_idx = parseRecordRID(rid);
+
+    Page* base_page = base_pages[base_page_idx];
+    int64_t* records = new int64_t[num_columns];
+
+    for (int i = 0; i < num_columns; i++) {
+        Page page = base_page[i];
+        records[i] = page[record_idx];
+    }
+    return records;
+}
