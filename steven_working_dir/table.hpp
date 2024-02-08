@@ -34,6 +34,8 @@ private:
     std::map<int, Record*> page_directory; // Mapping of RIDs to Records
     Index index; // Index for the table, assuming Index is defined
 
+    
+
     // Private method for merging (implementation not shown)
     void merge() {
         std::cout << "merge is happening" << std::endl;
