@@ -1,46 +1,18 @@
-#include <iostream>
-#include <vector>
-#include <map>
-#include "table.hpp"
+#include "Table.h"
 
-// Constants for column indices
-const int INDIRECTION_COLUMN = 0;
-const int RID_COLUMN = 1;
-const int TIMESTAMP_COLUMN = 2;
-const int SCHEMA_ENCODING_COLUMN = 3;
+class Table;
 
-class Record {
-public:
-    int rid; // Record ID
-    int key; // Key for accessing this record
-    std::vector<int> columns; // Data columns;
+Table::Table(std::string name, int key, int num_columns) : name{name}, key{key}, num_columns{num_columns} {
+    Page* new_base_page = new Page[num_columns + 4];
+    base_pages.push_back(new_base_page);
+}
 
-    // Constructor
-    Record(int rid, int key, const std::vector<int>& columns) : rid(rid), key(key), columns(columns) {}
-};
+Table::~Table() {}
 
-class Table {
-private:
-    
-    std::string name; // Table name
-    int num_columns; // Number of data columns
-    int key; // Index of table key in columns
-    std::map<int, Record*> page_directory; // Mapping of RIDs to Records
-    Index index; // Index for the table, assuming Index is defined
-
-    // Private method for merging (implementation not shown)
-    void merge() {
-        std::cout << "merge is happening" << std::endl;
+void Table::add_record(int64_t* input_data) {
+    auto final_row = base_pages.back();
+    for (int i = 0; i < num_columns; i++) {
+        final_row[i].add_record(input_data[i]);
     }
+}
 
-    public:
-    // Constructor
-    Table(const std::string& name, int num_columns, int key) : name(name), num_columns(num_columns), key(key), index(this) {}
-
-    // Other public methods would go here
-    /*
-    std::string getName() {
-        return name;
-    }
-    */
-};
