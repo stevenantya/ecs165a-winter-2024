@@ -16,3 +16,14 @@ void Table::add_record(int64_t* input_data) {
     }
 }
 
+void Table::display() {
+    for (auto base_page : base_pages) {
+        for (int i = 0; i < base_page->get_num_record(); i++) {
+            for (int j = 0; j < num_columns; j++) {
+                std::cout << base_page[j][i] << " ";
+            }
+            std::cout << "\n";
+        }
+    }
+}
+
