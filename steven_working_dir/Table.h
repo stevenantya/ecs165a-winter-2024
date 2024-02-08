@@ -1,6 +1,7 @@
 #include <string>
 #include <vector>
 #include "Page.h"
+#include <iostream>
 
 class Table {
     private:    
@@ -16,4 +17,6 @@ class Table {
         ~Table();
 
         void add_record(int64_t* input_data);
+
+        void display();
 };

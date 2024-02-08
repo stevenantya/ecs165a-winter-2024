@@ -5,4 +5,9 @@ int main() {
 
     int64_t data[] = {1, 2, 3, 4, 5};
     t.add_record(data);
+    t.add_record(data);
+    t.add_record(data);
+    t.add_record(data);
+
+    t.display();
 }

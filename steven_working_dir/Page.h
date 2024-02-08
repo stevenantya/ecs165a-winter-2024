@@ -12,5 +12,7 @@ class Page {
         int get_num_record();
 
         void add_record(int64_t data);
+
+        int64_t operator[](int r);
 };
 
