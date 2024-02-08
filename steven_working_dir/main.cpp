@@ -9,7 +9,7 @@ int main() {
     t.add_record(data);
     t.add_record(data);
 
-    printf("%s", t.getRecord("0:0"));
+    printf("%s", t.getRecord(0b0000000000000000));
 
     // t.display();
 }

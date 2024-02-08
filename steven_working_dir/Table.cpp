@@ -63,13 +63,13 @@ int64_t* Table::getRecord(int64_t rid_static) {
     int page_range_idx = parsePageRangeRID(&rid);
 
     //todo: page range not implemented yet
-    
+
     Page* base_page = base_pages[base_page_idx];
     int64_t* records = new int64_t[num_columns];
 
     for (int i = 0; i < num_columns; i++) {
-        Page page = base_page[i];
-        records[i] = page[record_idx];
+        int64_t record = base_page[i][record_idx];
+        records[i] = record;
     }
     return records;
 }
