@@ -13,6 +13,6 @@ void Page::add_record(int64_t data) {
     rows[num_records++] = data;
 }
 
-int64_t Page::operator[](int r) {
+int64_t& Page::operator[](int r) {
     return rows[r];
 }
