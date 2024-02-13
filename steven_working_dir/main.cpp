@@ -1,5 +1,12 @@
 #include "Table.h"
 const int64_t NULL_VAL = std::numeric_limits<uint64_t>::max();
+
+extern "C" {
+    void testfunc() {
+    printf("Hello World\n");
+}
+}
+
 int main() {
     Table t = Table("Test", 0, 5);
 

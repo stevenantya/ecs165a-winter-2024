@@ -1,13 +1,17 @@
 class Page:
-
     def __init__(self):
         self.num_records = 0
-        self.data = bytearray(4096)
+        self.rows = {}
 
-    def has_capacity(self):
-        pass
+    def get_num_record(self):
+        return self.num_records
 
-    def write(self, value):
+    def add_record(self, data):
+        self.rows[self.num_records] = data
         self.num_records += 1
-        pass
 
+    def __getitem__(self, r):
+        return self.rows[r]
+
+    def __setitem__(self, r, value):
+        self.rows[r] = value
