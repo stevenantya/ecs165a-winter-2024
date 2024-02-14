@@ -18,7 +18,7 @@ class Record:
 
 class Table:
     def __init__(self, name, key, num_columns):
-        self.PAGE_RANGE = 16
+        self.PAGE_RANGE = 128
         self.METACOLUMN_NUM = 3
         self.NULL_VAL = sys.maxsize
 
@@ -46,6 +46,7 @@ class Table:
 
         for i in range(self.METACOLUMN_NUM, self.num_columns + self.METACOLUMN_NUM):
             final_row[i].add_record(input_data[i - self.METACOLUMN_NUM])
+
     def update_record(self, rid, input_data):
         page_range_index = self.parsePageRangeRID(rid)
         base_page_index = self.parseBasePageRID(rid)
@@ -60,14 +61,24 @@ class Table:
         target_tail_page = target_page_range['tail_pages'][-1]
 
         previous_indirection = target_base_page[0][page_offset]
-        previous_tail_page = target_page_range['tail_pages'][self.parseIndirection(previous_indirection)]
+        # todo: fix bug
+        indirection_index = self.parseIndirection(previous_indirection)
+
+        if (indirection_index < 128):
+            # First update
+            previous_tail_page = target_page_range['base_pages'][indirection_index]
+        else:
+            # Subsequent updates
+            previous_tail_page = target_page_range['tail_pages'][indirection_index - 128]
 
         target_base_page[0][page_offset] = self.encode_indirection(len(target_page_range['tail_pages']) - 1 + 128, target_tail_page[0].get_num_record())
 
-        if previous_indirection == self.NULL_VAL:
-            target_tail_page[0].add_record(self.encode_indirection(base_page_index, page_offset))
-        else:
-            target_tail_page[0].add_record(previous_indirection)
+        # if previous_indirection == self.NULL_VAL:
+        #     target_tail_page[0].add_record(self.encode_indirection(base_page_index, page_offset))
+        # else:
+        #     target_tail_page[0].add_record(previous_indirection)
+
+        target_tail_page[0].add_record(previous_indirection)
 
         target_tail_page[1].add_record(self.get_time())  # Timestamp
 
@@ -75,11 +86,15 @@ class Table:
         for i in range(self.METACOLUMN_NUM, self.num_columns + self.METACOLUMN_NUM):
             field = input_data[i - self.METACOLUMN_NUM]
 
+            # If no need to update field
             if field == self.NULL_VAL:
+                # If there is previous update to this column
                 if self.extract_bit(target_base_page[2][page_offset], self.num_columns - (i - self.METACOLUMN_NUM) - 1):
+                    # Copy value from previous update
                     target_tail_page[i].add_record(previous_tail_page[i][self.parseRecord(previous_indirection)])
                     schema_encoding += 1 << (self.num_columns - (i - self.METACOLUMN_NUM) - 1)
                 else:
+                    # Base value
                     target_tail_page[i].add_record(field)
             else:
                 schema_encoding += 1 << (self.num_columns - (i - self.METACOLUMN_NUM) - 1)
@@ -171,7 +186,7 @@ class Table:
 
     def encode_indirection(self, page_index, page_offset):
         indirection = page_offset
-        indirection = indirection | page_index << 9
+        indirection += (page_index << 9)
         return indirection
 
     def extract_bit(self, schema_encoding, position):
