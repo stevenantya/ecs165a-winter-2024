@@ -171,7 +171,7 @@ class Table:
         target_base_page[0][page_offset] = self.NULL_VAL
 
         # Remove the rid of this record from index
-        del self.index.indices[self.key][target_base_page[self.key][page_offset]]
+        del self.index.indices[self.key][target_base_page[self.key + self.METACOLUMN_NUM][page_offset]]
 
     def add_base_page(self):
         # If current page range is full of base page, create new page range
