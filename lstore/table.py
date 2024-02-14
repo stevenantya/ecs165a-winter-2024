@@ -17,7 +17,7 @@ class Record:
         self.columns = columns
 
 class Table:
-    def __init__(self, name, key, num_columns):
+    def __init__(self, name, num_columns, key):
         self.PAGE_RANGE = 128
         self.METACOLUMN_NUM = 3
         self.NULL_VAL = 2 ** 64 - 1
