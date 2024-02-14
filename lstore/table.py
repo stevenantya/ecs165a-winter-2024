@@ -28,6 +28,8 @@ class Table:
         self.page_ranges = []
         self.add_base_page()
 
+        self.index = Index(self)
+
     def __del__(self):
         pass  # Destructor logic here if needed
 
@@ -118,8 +120,7 @@ class Table:
         # Points to the latest tail record
         curr_indirection = target_base_page[0][page_offset]
 
-        for i in range(0, version, -1):
-            # Arrive at the base record so can stop moving
+        for i in range(0 , version, -1):
             if self.parseIndirection(curr_indirection) < 128:
                 break
             curr_indirection = target_page_range['tail_pages'][self.parseIndirection(curr_indirection) - 128][0][self.parseRecord(curr_indirection)]
