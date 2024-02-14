@@ -2,7 +2,6 @@ from table import Table
 from page import Page
 
 NULL_VAL = 2**64 - 1
-print("{0:b}".format(NULL_VAL))
 
 t = Table("Test", 0, 5)
 
