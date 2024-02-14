@@ -37,6 +37,10 @@ class Table:
         return int(time())
 
     def add_record(self, input_data):
+        # Existing record with the same key, so forbid adding a duplicate record
+        if input_data[self.key] in self.index.indices[self.key]:
+            return False
+
         # Get to the first empty record inside a bottomost page range's bottomost basae page
         final_row = self.page_ranges[-1]['base_pages'][-1]
 
@@ -56,7 +60,13 @@ class Table:
         # Add the new record's rid to index
         self.index.indices[self.key][input_data[self.key]] = self.encode_RID(len(self.page_ranges) - 1, len(self.page_ranges[-1]["base_pages"]) - 1, final_row[0].get_num_record() - 1)
 
+        return True
+
     def update_record(self, rid, input_data):
+        # Existing record with the same key, so forbid adding a duplicate record
+        if input_data[self.key] in self.index.indices[self.key]:
+            return False
+
         page_range_index = self.parsePageRangeRID(rid)
         base_page_index = self.parseBasePageRID(rid)
         page_offset = self.parseRecord(rid)
@@ -111,6 +121,8 @@ class Table:
         target_base_page[2][page_offset] = schema_encoding
         # Add the schema encoding for the latest tail record
         target_tail_page[2].add_record(schema_encoding)
+
+        return True
 
     def get_record(self, rid, projected_columns_index, version):
         page_range_index = self.parsePageRangeRID(rid)
