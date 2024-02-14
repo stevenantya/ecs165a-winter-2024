@@ -17,6 +17,13 @@ insert_time_1 = process_time()
 
 print("Inserting 10k records took:  \t\t\t", insert_time_1 - insert_time_0)
 
+#
+temp = db.create_table('y', 5, 0)
+print(grades_table.index.indices)
+grades_table.add_record(1)
+grades_table.index.locate(0,1)
+#
+
 # Measuring update Performance
 update_cols = [
     [None, None, None, None, None],
