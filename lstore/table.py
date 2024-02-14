@@ -1,7 +1,7 @@
 import sys
-from index import Index
+from .index import Index
 from time import time
-from page import Page
+from .page import Page
 
 INDIRECTION_COLUMN = 0
 RID_COLUMN = 1
@@ -20,7 +20,7 @@ class Table:
     def __init__(self, name, key, num_columns):
         self.PAGE_RANGE = 128
         self.METACOLUMN_NUM = 3
-        self.NULL_VAL = sys.maxsize
+        self.NULL_VAL = 2 ** 64 - 1
 
         self.name = name
         self.key = key
@@ -28,11 +28,13 @@ class Table:
         self.page_ranges = []
         self.add_base_page()
 
+        self.index = Index(self)
+
     def __del__(self):
         pass  # Destructor logic here if needed
 
     def get_time(self):
-        return int(time() * 1000)
+        return int(time())
 
     def add_record(self, input_data):
         final_row = self.page_ranges[-1]['base_pages'][-1]
@@ -114,7 +116,7 @@ class Table:
 
         curr_indirection = target_base_page[0][page_offset]
 
-        for i in range(version, 0, -1):
+        for i in range(0, version, -1):
             if self.parseIndirection(curr_indirection) < 128:
                 break
             curr_indirection = target_page_range['tail_pages'][self.parseIndirection(curr_indirection) - 128][0][self.parseRecord(curr_indirection)]
