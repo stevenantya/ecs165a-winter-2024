@@ -53,6 +53,9 @@ class Table:
         for i in range(self.METACOLUMN_NUM, self.num_columns + self.METACOLUMN_NUM):
             final_row[i].add_record(input_data[i - self.METACOLUMN_NUM])
 
+        # Add the new record's rid to index
+        self.index.indices[self.key][input_data[self.key]] = self.encode_RID(len(self.page_ranges) - 1, len(self.page_ranges[-1]["base_pages"]) - 1, final_row[0].get_num_record() - 1)
+
     def update_record(self, rid, input_data):
         page_range_index = self.parsePageRangeRID(rid)
         base_page_index = self.parseBasePageRID(rid)
@@ -150,6 +153,9 @@ class Table:
         # Sets indirection of base record to NULL_VAL to imply deletion
         target_base_page[0][page_offset] = self.NULL_VAL
 
+        # Remove the rid of this record from index
+        del self.index.indices[self.key][target_base_page[self.key][page_offset]]
+
     def add_base_page(self):
         # If current page range is full of base page, create new page range
         if not self.page_ranges or len(self.page_ranges[-1]['base_pages']) == 128:
@@ -203,6 +209,13 @@ class Table:
         indirection = page_offset
         indirection += (page_index << 9)
         return indirection
+    
+    def encode_RID(self, page_range, page_index, page_offset):
+        rid = page_offset
+        rid += (page_index << 9)
+        rid += (page_range << 16)
+
+        return rid
 
     # Checks if the i-th position bit is 0 or 1 
     def extract_bit(self, schema_encoding, position):
