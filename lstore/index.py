@@ -26,9 +26,8 @@ class Index:
     """
 
     def locate(self, column, value):
-        if self.indices[column].has_key(value):
+        if value in self.indices[column]:
             return self.indices[column][value]
-        return []
 
     """
     # Returns the RIDs of all records with values in column "column" between "begin" and "end"
@@ -36,9 +35,10 @@ class Index:
 
     def locate_range(self, begin, end, column):
         returnRIDs = []
-        search = self.indices[column].values(min = begin, max = end)
-        for element in search:
-            returnRIDs.append(element)
+        for key in range(begin, end + 1):
+            if key in self.indices[column]:
+                returnRIDs += self.indices[column][key]
+
         return returnRIDs
 
     """
@@ -46,13 +46,7 @@ class Index:
     """
 
     def create_index(self, column_number):
-        """
-        self.indices[column_number] = OOBTree()
-        columnRecords = self.table. 
-        for record in columnRecords:
-            self.indices[column_number].insert(record)
-        pass
-        """
+        self.indices[column_number] = {}
 
     """
     # optional: Drop index of specific column
@@ -61,6 +55,6 @@ class Index:
     def drop_index(self, column_number):
         #Am I allowed to drop the index of the primary key??
         if column_number != self.table.key:
-            self.indices[column_number] =None 
+            self.indices[column_number] = None 
         else:
             return
