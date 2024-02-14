@@ -60,9 +60,13 @@ class Query:
     def select_version(self, search_key, search_key_index, projected_columns_index, relative_version):
         rid = self.table.index.locate(search_key_index, search_key)
 
-        rtn = self.table.get_record(rid, projected_columns_index, relative_version)
+        if not rid and rid != 0:
+            return False
 
-        return rtn
+        rtn = self.table.get_record(rid, projected_columns_index, relative_version)
+        rtn = Record(0, 0, rtn)
+
+        return [rtn]
     
     """
     # Update a record with specified key and columns
@@ -96,10 +100,13 @@ class Query:
     # Returns False if no record exists in the given range
     """
     def sum_version(self, start_range, end_range, aggregate_column_index, relative_version):
-        sumval = False
+        sumval = 0
 
         for i in range(start_range, end_range + 1):
-            sumval += self.select_version(i, self.table.key, [1 if k == aggregate_column_index else 0 for k in range(self.table.num_columns)], relative_version)[0]
+            val = self.select_version(i, self.table.key, [1 if k == aggregate_column_index else 0 for k in range(self.table.num_columns)], relative_version)
+            if val == False:
+                continue
+            sumval += val[0].columns[0]
 
         return sumval
     

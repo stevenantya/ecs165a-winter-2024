@@ -104,7 +104,7 @@ class Table:
             field = input_data[i - self.METACOLUMN_NUM]
 
             # If no need to update field
-            if field == self.NULL_VAL:
+            if field == None and field != 0:
                 # If there is previous update to this column
                 if self.extract_bit(target_base_page[2][page_offset], self.num_columns - (i - self.METACOLUMN_NUM) - 1):
                     # Copy value from previous update
@@ -150,7 +150,12 @@ class Table:
         # Forms the return based on the projected_columns_index, only if it is 1 will it be appended
         for i in range(self.num_columns):
             if projected_columns_index[i]:
-                rtn_record.append(target_page[i + self.METACOLUMN_NUM][self.parseRecord(curr_indirection)])
+                val = target_page[i + self.METACOLUMN_NUM][self.parseRecord(curr_indirection)]
+                                                           
+                if val != None or val == 0:
+                    rtn_record.append(target_page[i + self.METACOLUMN_NUM][self.parseRecord(curr_indirection)])
+                else:
+                    rtn_record.append(target_base_page[i + self.METACOLUMN_NUM][page_offset])
 
         return rtn_record
 
