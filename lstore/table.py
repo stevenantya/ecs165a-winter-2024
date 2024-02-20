@@ -2,12 +2,8 @@ import sys
 from .index import Index
 from time import time
 from .page import Page
-
-INDIRECTION_COLUMN = 0
-RID_COLUMN = 1
-TIMESTAMP_COLUMN = 2
-SCHEMA_ENCODING_COLUMN = 3
-
+from . import config
+import math
 
 class Record:
 
@@ -18,10 +14,6 @@ class Record:
 
 class Table:
     def __init__(self, name, num_columns, key):
-        self.PAGE_RANGE = 128
-        self.METACOLUMN_NUM = 3
-        self.NULL_VAL = 2 ** 64 - 1
-
         self.name = name
         self.key = key
         self.num_columns = num_columns
@@ -41,24 +33,24 @@ class Table:
         if input_data[self.key] in self.index.indices[self.key]:
             return False
 
-        # Get to the first empty record inside a bottomost page range's bottomost basae page
+        # Get to the first empty record inside a bottomost page range's bottomost base page
         final_row = self.page_ranges[-1]['base_pages'][-1]
 
         # Add a new base page if current bottomost base page is full
-        if final_row[0].get_num_record() == 512:
+        if final_row[config.INDIRECTION_COLUMN].get_num_record() == config.PAGE_MAX_ROWS:
             self.add_base_page()
             final_row = self.page_ranges[-1]['base_pages'][-1]
 
-        final_row[0].add_record(self.encode_indirection(len(self.page_ranges[-1]['base_pages']) - 1, final_row[0].get_num_record()))  # Indirection
-        final_row[1].add_record(self.get_time())  # Timestamp
-        final_row[2].add_record(0)  # Schema Encoding
+        final_row[config.INDIRECTION_COLUMN].add_record(self.encode_indirection(len(self.page_ranges[-1]['base_pages']) - 1, final_row[config.INDIRECTION_COLUMN].get_num_record()))  # Indirection
+        final_row[config.TIMESTAMP_COLUMN].add_record(self.get_time())  # Timestamp
+        final_row[config.SCHEMA_ENCODING_COLUMN].add_record(0)  # Schema Encoding
 
         # Add the data value to respective columns
-        for i in range(self.METACOLUMN_NUM, self.num_columns + self.METACOLUMN_NUM):
-            final_row[i].add_record(input_data[i - self.METACOLUMN_NUM])
+        for i in range(config.METACOLUMN_NUM, self.num_columns + config.METACOLUMN_NUM):
+            final_row[i].add_record(input_data[i - config.METACOLUMN_NUM])
 
         # Add the new record's rid to index
-        self.index.indices[self.key][input_data[self.key]] = self.encode_RID(len(self.page_ranges) - 1, len(self.page_ranges[-1]["base_pages"]) - 1, final_row[0].get_num_record() - 1)
+        self.index.indices[self.key][input_data[self.key]] = self.encode_RID(len(self.page_ranges) - 1, len(self.page_ranges[-1]["base_pages"]) - 1, final_row[config.INDIRECTION_COLUMN].get_num_record() - 1)
 
         return True
 
@@ -74,53 +66,53 @@ class Table:
         target_page_range = self.page_ranges[page_range_index]
 
         # Adds a new tail page if there isn't an existing one or the existing one is full
-        if not target_page_range['tail_pages'] or target_page_range['tail_pages'][-1][0].get_num_record() == 512:
+        if not target_page_range['tail_pages'] or target_page_range['tail_pages'][-1][config.INDIRECTION_COLUMN].get_num_record() == config.PAGE_MAX_ROWS:
             self.add_tail_page(page_range_index)
 
         target_base_page = target_page_range['base_pages'][base_page_index]
         target_tail_page = target_page_range['tail_pages'][-1]
 
         # The original indirection stored in the base record
-        previous_indirection = target_base_page[0][page_offset]
+        previous_indirection = target_base_page[config.INDIRECTION_COLUMN][page_offset]
         indirection_index = self.parseIndirection(previous_indirection)
 
-        if (indirection_index < 128):
+        if (indirection_index < config.PAGE_RANGE):
             # First update
             previous_tail_page = target_page_range['base_pages'][indirection_index]
         else:
             # Subsequent updates
-            previous_tail_page = target_page_range['tail_pages'][indirection_index - 128]
+            previous_tail_page = target_page_range['tail_pages'][indirection_index - config.PAGE_RANGE]
 
         # Update base record's indirection to points to the new tail record to be added
-        target_base_page[0][page_offset] = self.encode_indirection(len(target_page_range['tail_pages']) - 1 + 128, target_tail_page[0].get_num_record())
+        target_base_page[config.INDIRECTION_COLUMN][page_offset] = self.encode_indirection(len(target_page_range['tail_pages']) - 1 + config.PAGE_RANGE, target_tail_page[config.INDIRECTION_COLUMN].get_num_record())
 
         # Makes the latest tail record indirection point to the previus version
-        target_tail_page[0].add_record(previous_indirection)
+        target_tail_page[config.INDIRECTION_COLUMN].add_record(previous_indirection)
 
-        target_tail_page[1].add_record(self.get_time())  # Timestamp
+        target_tail_page[config.TIMESTAMP_COLUMN].add_record(self.get_time())  # Timestamp
 
         schema_encoding = 0
-        for i in range(self.METACOLUMN_NUM, self.num_columns + self.METACOLUMN_NUM):
-            field = input_data[i - self.METACOLUMN_NUM]
+        for i in range(config.METACOLUMN_NUM, self.num_columns + config.METACOLUMN_NUM):
+            field = input_data[i - config.METACOLUMN_NUM]
 
             # If no need to update field
-            if field == None and field != 0:
+            if field == None:
                 # If there is previous update to this column
-                if self.extract_bit(target_base_page[2][page_offset], self.num_columns - (i - self.METACOLUMN_NUM) - 1):
+                if self.extract_bit(target_base_page[config.SCHEMA_ENCODING_COLUMN][page_offset], self.num_columns - (i - config.METACOLUMN_NUM) - 1):
                     # Copy value from previous update
                     target_tail_page[i].add_record(previous_tail_page[i][self.parseRecord(previous_indirection)])
-                    schema_encoding += 1 << (self.num_columns - (i - self.METACOLUMN_NUM) - 1)
+                    schema_encoding += 1 << (self.num_columns - (i - config.METACOLUMN_NUM) - 1)
                 else:
                     # Add null value
                     target_tail_page[i].add_record(field)
             else:
-                schema_encoding += 1 << (self.num_columns - (i - self.METACOLUMN_NUM) - 1)
+                schema_encoding += 1 << (self.num_columns - (i - config.METACOLUMN_NUM) - 1)
                 target_tail_page[i].add_record(field)
 
         # Update scheme encoding in base record
-        target_base_page[2][page_offset] = schema_encoding
+        target_base_page[config.SCHEMA_ENCODING_COLUMN][page_offset] = schema_encoding
         # Add the schema encoding for the latest tail record
-        target_tail_page[2].add_record(schema_encoding)
+        target_tail_page[config.SCHEMA_ENCODING_COLUMN].add_record(schema_encoding)
 
         return True
 
@@ -133,29 +125,29 @@ class Table:
 
         target_base_page = target_page_range['base_pages'][base_page_index]
         # Points to the latest tail record
-        curr_indirection = target_base_page[0][page_offset]
+        curr_indirection = target_base_page[config.INDIRECTION_COLUMN][page_offset]
 
         for i in range(0 , version, -1):
-            if self.parseIndirection(curr_indirection) < 128:
+            if self.parseIndirection(curr_indirection) < config.PAGE_RANGE:
                 break
-            curr_indirection = target_page_range['tail_pages'][self.parseIndirection(curr_indirection) - 128][0][self.parseRecord(curr_indirection)]
+            curr_indirection = target_page_range['tail_pages'][self.parseIndirection(curr_indirection) - config.PAGE_RANGE][config.INDIRECTION_COLUMN][self.parseRecord(curr_indirection)]
 
         # Find the target record's page
-        if self.parseIndirection(curr_indirection) < 128:
+        if self.parseIndirection(curr_indirection) < config.PAGE_RANGE:
             target_page = target_base_page
         else:
-            target_page = target_page_range['tail_pages'][self.parseIndirection(curr_indirection) - 128]
+            target_page = target_page_range['tail_pages'][self.parseIndirection(curr_indirection) - config.PAGE_RANGE]
 
         rtn_record = []
         # Forms the return based on the projected_columns_index, only if it is 1 will it be appended
         for i in range(self.num_columns):
             if projected_columns_index[i]:
-                val = target_page[i + self.METACOLUMN_NUM][self.parseRecord(curr_indirection)]
+                val = target_page[i + config.METACOLUMN_NUM][self.parseRecord(curr_indirection)]
                                                            
-                if val != None or val == 0:
-                    rtn_record.append(target_page[i + self.METACOLUMN_NUM][self.parseRecord(curr_indirection)])
+                if val != None:
+                    rtn_record.append(target_page[i + config.METACOLUMN_NUM][self.parseRecord(curr_indirection)])
                 else:
-                    rtn_record.append(target_base_page[i + self.METACOLUMN_NUM][page_offset])
+                    rtn_record.append(target_base_page[i + config.METACOLUMN_NUM][page_offset])
 
         return rtn_record
 
@@ -168,69 +160,69 @@ class Table:
         target_base_page = target_page_range['base_pages'][base_page_index]
 
         # Sets indirection of base record to NULL_VAL to imply deletion
-        target_base_page[0][page_offset] = self.NULL_VAL
+        target_base_page[config.INDIRECTION_COLUMN][page_offset] = config.NULL_VAL
 
         # Remove the rid of this record from index
-        del self.index.indices[self.key][target_base_page[self.key + self.METACOLUMN_NUM][page_offset]]
+        del self.index.indices[self.key][target_base_page[self.key + config.METACOLUMN_NUM][page_offset]]
 
     def add_base_page(self):
         # If current page range is full of base page, create new page range
-        if not self.page_ranges or len(self.page_ranges[-1]['base_pages']) == 128:
+        if not self.page_ranges or len(self.page_ranges[-1]['base_pages']) == config.PAGE_RANGE:
             self.page_ranges.append({'base_pages': [], 'tail_pages': []})
 
-        new_base_page = [Page() for _ in range(self.num_columns + self.METACOLUMN_NUM)]
+        new_base_page = [Page() for _ in range(self.num_columns + config.METACOLUMN_NUM)]
         self.page_ranges[-1]['base_pages'].append(new_base_page)
 
     def add_tail_page(self, page_range_index):
         target_page_range = self.page_ranges[page_range_index]
-        new_tail_page = [Page() for _ in range(self.num_columns + self.METACOLUMN_NUM)]
+        new_tail_page = [Page() for _ in range(self.num_columns + config.METACOLUMN_NUM)]
         target_page_range['tail_pages'].append(new_tail_page)
 
     def display(self):
         for pr in self.page_ranges:
             for base_page in pr['base_pages']:
-                for i in range(base_page[0].get_num_record()):  # Assuming get_num_record() method exists
-                    print('    '.join(f'{base_page[j][i]:016x}' for j in range(self.num_columns + self.METACOLUMN_NUM)))
+                for i in range(base_page[config.INDIRECTION_COLUMN].get_num_record()):  # Assuming get_num_record() method exists
+                    print('    '.join(f'{base_page[j][i]:016x}' for j in range(self.num_columns + config.METACOLUMN_NUM)))
                 print('-' * 150)
             for tail_page in pr['tail_pages']:
-                for i in range(tail_page[0].get_num_record()):  # Assuming get_num_record() method exists
-                    print('    '.join(f'{tail_page[j][i]:016x}' for j in range(self.num_columns + self.METACOLUMN_NUM)))
+                for i in range(tail_page[config.INDIRECTION_COLUMN].get_num_record()):  # Assuming get_num_record() method exists
+                    print('    '.join(f'{tail_page[j][i]:016x}' for j in range(self.num_columns + config.METACOLUMN_NUM)))
                 print('-' * 150)
 
     # Extract the leftmost 48 bits of rid to get page range
     def parsePageRangeRID(self, rid):
-        bitmask = 0xFFFFFFFFFFFF0000
-        page_range_idx = (rid & bitmask) >> 16
+        bitmask = (2 ** (64 - int(math.log(config.PAGE_RANGE, 2)) - int(math.log(config.PAGE_MAX_ROWS, 2))) - 1) << (int(math.log(config.PAGE_RANGE, 2)) + int(math.log(config.PAGE_MAX_ROWS, 2)))
+        page_range_idx = (rid & bitmask) >> (int(math.log(config.PAGE_RANGE, 2)) + int(math.log(config.PAGE_MAX_ROWS, 2)))
         return page_range_idx
 
-    # Extract the in between 7 bits of rid to get base page
+    # Extract the in between 7 bits of rid to get base page index
     def parseBasePageRID(self, rid):
-        bitmask = 0xFE00
-        base_page_idx = (rid & bitmask) >> 9
+        bitmask = (2 ** int(math.log(config.PAGE_RANGE, 2)) - 1) << int(math.log(config.PAGE_MAX_ROWS, 2))
+        base_page_idx = (rid & bitmask) >> int(math.log(config.PAGE_MAX_ROWS, 2))
         return base_page_idx
 
     # Extract the rightmost 9 bits to get page offset
     def parseRecord(self, rid):
-        bitmask = 0x1FF
+        bitmask = (1 << int(math.log(config.PAGE_MAX_ROWS, 2))) - 1
         record_idx = rid & bitmask
         return record_idx
 
     #Extract the leftmost 55 bits from indirection to get page number inside page range
     def parseIndirection(self, rid):
-        bitmask = 0xFFFFFFFFFFFFFE00
-        tail_page_idx = (rid & bitmask) >> 9
+        bitmask = (2 ** (64 - int(math.log(config.PAGE_MAX_ROWS, 2))) - 1) << int(math.log(config.PAGE_MAX_ROWS, 2))
+        tail_page_idx = (rid & bitmask) >> int(math.log(config.PAGE_MAX_ROWS, 2))
         return tail_page_idx
 
     # Encodes indirection in the form of 55 + 9 bits, page index and page offset respectively
     def encode_indirection(self, page_index, page_offset):
         indirection = page_offset
-        indirection += (page_index << 9)
+        indirection += (page_index << int(math.log(config.PAGE_MAX_ROWS, 2)))
         return indirection
     
     def encode_RID(self, page_range, page_index, page_offset):
         rid = page_offset
-        rid += (page_index << 9)
-        rid += (page_range << 16)
+        rid += (page_index << int(math.log(config.PAGE_MAX_ROWS, 2)))
+        rid += (page_range << (int(math.log(config.PAGE_RANGE, 2)) + int(math.log(config.PAGE_MAX_ROWS, 2))))
 
         return rid
 

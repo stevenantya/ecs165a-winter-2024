@@ -1,13 +1,15 @@
+from . import config
+
 class Page:
     def __init__(self):
         self.num_records = 0
-        self.rows = [0] * 512  # Initialize a list of 512 zeros
+        self.rows = [0] * config.PAGE_MAX_ROWS  # Initialize a list of 512 zeros
 
     def get_num_record(self):
         return self.num_records
 
     def add_record(self, data):
-        if self.num_records < 512:
+        if self.num_records < config.PAGE_MAX_ROWS:
             self.rows[self.num_records] = data
             self.num_records += 1
         else:
@@ -21,7 +23,7 @@ class Page:
             return None
 
     def __setitem__(self, r, value):
-        if r < 512:
+        if r < config.PAGE_MAX_ROWS:
             self.rows[r] = value
             if r >= self.num_records:
                 self.num_records = r + 1
