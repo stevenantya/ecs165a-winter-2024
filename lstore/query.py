@@ -60,7 +60,7 @@ class Query:
     def select_version(self, search_key, search_key_index, projected_columns_index, relative_version):
         rid = self.table.index.locate(search_key_index, search_key)
 
-        if not rid and rid != 0:
+        if rid is False:
             return False
 
         rtn = self.table.get_record(rid, projected_columns_index, relative_version)
