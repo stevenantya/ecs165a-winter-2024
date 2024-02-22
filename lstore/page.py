@@ -17,6 +17,7 @@ class Page:
         if self.num_records < config.PAGE_MAX_ROWS:
             self.rows[self.num_records] = data
             self.num_records += 1
+            self.dirty = 1
         else:
             print("Error: Page is full.")
 
@@ -32,6 +33,7 @@ class Page:
             self.rows[r] = value
             if r >= self.num_records:
                 self.num_records = r + 1
+            self.dirty = 1
         else:
             print("Error: Index out of range.")
 

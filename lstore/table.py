@@ -13,12 +13,11 @@ class Record:
         self.columns = columns
 
 class Table:
-    def __init__(self, name, num_columns, key):
+    def __init__(self, parent, name, num_columns, key):
+        self.db = parent
         self.name = name
         self.key = key
         self.num_columns = num_columns
-        self.page_ranges = []
-        self.add_base_page()
 
         self.index = Index(self)
 
@@ -34,23 +33,30 @@ class Table:
             return False
 
         # Get to the first empty record inside a bottomost page range's bottomost base page
-        final_row = self.page_ranges[-1]['base_pages'][-1]
+        final_page_range = len(self.db.page_table) - 1
 
-        # Add a new base page if current bottomost base page is full
-        if final_row[config.INDIRECTION_COLUMN].get_num_record() == config.PAGE_MAX_ROWS:
+        if final_page_range >= 0:
+            final_base_page_index = len(self.db.page_table[str(final_page_range)]) - 1
+            final_row_page = self.db.get_page(final_page_range, final_base_page_index, config.INDIRECTION_COLUMN)
+            final_row_num = final_row_page.get_num_record() 
+
+        # Add a new base page if there is no page range or current bottomost base page is full
+        if final_page_range < 0 or final_row_num == config.PAGE_MAX_ROWS:
             self.add_base_page()
-            final_row = self.page_ranges[-1]['base_pages'][-1]
+            final_page_range = len(self.db.page_table) - 1
+            final_base_page_index = len(self.db.page_table[str(final_page_range)]) - 1
+            final_row_num = 0
 
-        final_row[config.INDIRECTION_COLUMN].add_record(self.encode_indirection(len(self.page_ranges[-1]['base_pages']) - 1, final_row[config.INDIRECTION_COLUMN].get_num_record()))  # Indirection
-        final_row[config.TIMESTAMP_COLUMN].add_record(self.get_time())  # Timestamp
-        final_row[config.SCHEMA_ENCODING_COLUMN].add_record(0)  # Schema Encoding
+        self.db.get_page(final_page_range, final_base_page_index, config.INDIRECTION_COLUMN).add_record(self.encode_indirection(final_base_page_index, final_row_num))  # Indirection
+        self.db.get_page(final_page_range, final_base_page_index, config.TIMESTAMP_COLUMN).add_record(self.get_time())
+        self.db.get_page(final_page_range, final_base_page_index, config.SCHEMA_ENCODING_COLUMN).add_record(0)
 
         # Add the data value to respective columns
         for i in range(config.METACOLUMN_NUM, self.num_columns + config.METACOLUMN_NUM):
-            final_row[i].add_record(input_data[i - config.METACOLUMN_NUM])
+            self.db.get_page(final_page_range, final_base_page_index, i).add_record(input_data[i - config.METACOLUMN_NUM])
 
         # Add the new record's rid to index
-        self.index.indices[self.key][input_data[self.key]] = self.encode_RID(len(self.page_ranges) - 1, len(self.page_ranges[-1]["base_pages"]) - 1, final_row[config.INDIRECTION_COLUMN].get_num_record() - 1)
+        self.index.indices[self.key][input_data[self.key]] = self.encode_RID(final_page_range, final_base_page_index, final_row_num)
 
         return True
 
@@ -166,12 +172,11 @@ class Table:
         del self.index.indices[self.key][target_base_page[self.key + config.METACOLUMN_NUM][page_offset]]
 
     def add_base_page(self):
-        # If current page range is full of base page, create new page range
-        if not self.page_ranges or len(self.page_ranges[-1]['base_pages']) == config.PAGE_RANGE:
-            self.page_ranges.append({'base_pages': [], 'tail_pages': []})
+        # If no existing page range or current page range is full of base page, create new page range
+        if not self.db.page_table or len(self.db.page_table[str(len(self.db.page_table)-1)]) == config.PAGE_RANGE:
+            self.db.page_table[str(len(self.db.page_table))] = {}
 
-        new_base_page = [Page() for _ in range(self.num_columns + config.METACOLUMN_NUM)]
-        self.page_ranges[-1]['base_pages'].append(new_base_page)
+        self.db.page_table[str(len(self.db.page_table)-1)]["0"] = {str(i) : -1 for i in range(self.num_columns + config.METACOLUMN_NUM)}
 
     def add_tail_page(self, page_range_index):
         target_page_range = self.page_ranges[page_range_index]

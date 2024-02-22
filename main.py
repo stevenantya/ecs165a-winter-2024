@@ -17,4 +17,5 @@ grades_table = db.create_table('Grades', 5, 0)
 query = Query(grades_table)
 
 query.insert(1, 2, 3, 4, 5)
-print(query.sum(1, 100, 1))
+
+db.close()
