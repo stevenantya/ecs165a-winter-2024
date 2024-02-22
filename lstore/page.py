@@ -2,8 +2,13 @@ from . import config
 
 class Page:
     def __init__(self):
+        self.page_name = ""
+
         self.num_records = 0
         self.rows = [0] * config.PAGE_MAX_ROWS  # Initialize a list of 512 zeros
+
+        self.pin = 0
+        self.dirty = 0
 
     def get_num_record(self):
         return self.num_records
