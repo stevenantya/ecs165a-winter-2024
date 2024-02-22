@@ -70,6 +70,7 @@ class Database():
         else:
             new_page = Page()
             new_page.page_name = f"r{page_range}p{page_index}c{column_index}"
+            new_page.pin += 1
 
             file_path = self.file_directory + "/" + new_page.page_name + ".bin"
             if os.path.exists(file_path):
