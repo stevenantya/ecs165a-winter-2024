@@ -17,6 +17,10 @@ class Database():
     # Not required for milestone1
     def open(self, path):
         self.file_directory = path
+
+        if not os.path.exists(path):
+            os.makedirs(path)
+
         self.load_page_table()
 
     def close(self):
