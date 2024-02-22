@@ -94,10 +94,12 @@ class Database():
             for bufferpool_index in self.page_stack:
                 if self.bufferpool[bufferpool_index].pin == 0:
                     break
+            # Overwrite existing file is evicting dirty page
             if self.bufferpool[bufferpool_index].dirty:
                 self.evict_page(bufferpool_index)
+
             self.bufferpool[bufferpool_index] = new_page
-            
+        self.page_stack.append(bufferpool_index)
         self.page_table[str(page_range)][str(page_index)][str(column_index)] = bufferpool_index
         return new_page
 
