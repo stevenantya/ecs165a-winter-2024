@@ -39,6 +39,7 @@ class Table:
             final_base_page_index = len(self.db.page_table[str(final_page_range)]) - 1
             final_row_page = self.db.get_page(final_page_range, final_base_page_index, config.INDIRECTION_COLUMN)
             final_row_num = final_row_page.get_num_record() 
+            final_row_page.pin -= 1
 
         # Add a new base page if there is no page range or current bottomost base page is full
         if final_page_range < 0 or final_row_num == config.PAGE_MAX_ROWS:
@@ -47,13 +48,26 @@ class Table:
             final_base_page_index = len(self.db.page_table[str(final_page_range)]) - 1
             final_row_num = 0
 
-        self.db.get_page(final_page_range, final_base_page_index, config.INDIRECTION_COLUMN).add_record(self.encode_indirection(final_base_page_index, final_row_num))  # Indirection
-        self.db.get_page(final_page_range, final_base_page_index, config.TIMESTAMP_COLUMN).add_record(self.get_time())
-        self.db.get_page(final_page_range, final_base_page_index, config.SCHEMA_ENCODING_COLUMN).add_record(0)
+        # Indirection
+        indirection_page = self.db.get_page(final_page_range, final_base_page_index, config.INDIRECTION_COLUMN)
+        indirection_page.add_record(self.encode_indirection(final_base_page_index, final_row_num))  
+        indirection_page.pin -= 1
+
+        # Timestamp
+        timestamp_page = self.db.get_page(final_page_range, final_base_page_index, config.TIMESTAMP_COLUMN)
+        timestamp_page.add_record(self.get_time())
+        timestamp_page.pin -= 1
+        
+        # Schema encoding
+        schema_page = self.db.get_page(final_page_range, final_base_page_index, config.SCHEMA_ENCODING_COLUMN)
+        schema_page.add_record(0)
+        schema_page.pin -= 1
 
         # Add the data value to respective columns
         for i in range(config.METACOLUMN_NUM, self.num_columns + config.METACOLUMN_NUM):
-            self.db.get_page(final_page_range, final_base_page_index, i).add_record(input_data[i - config.METACOLUMN_NUM])
+            data_page = self.db.get_page(final_page_range, final_base_page_index, i)
+            data_page.add_record(input_data[i - config.METACOLUMN_NUM])
+            data_page.pin -= 1
 
         # Add the new record's rid to index
         self.index.indices[self.key][input_data[self.key]] = self.encode_RID(final_page_range, final_base_page_index, final_row_num)

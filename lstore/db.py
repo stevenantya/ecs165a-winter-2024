@@ -12,6 +12,7 @@ class Database():
 
         self.tables = []
         self.bufferpool = []
+        self.page_stack = []
         self.page_table = {}
 
     # Not required for milestone1
@@ -60,7 +61,11 @@ class Database():
     def get_page(self, page_range, page_index, column_index):
         # Check if requested page is in bufferpool
         if self.page_table[str(page_range)][str(page_index)][str(column_index)] != -1:
-            page = self.bufferpool[self.page_table[str(page_range)][str(page_index)][str(column_index)]]
+            bufferpool_index = self.page_table[str(page_range)][str(page_index)][str(column_index)]
+            page = self.bufferpool[bufferpool_index]
+            page.pin += 1
+            self.page_stack.remove(bufferpool_index)
+            self.page_stack.append(bufferpool_index)
             return page
         else:
             new_page = Page()
@@ -84,7 +89,14 @@ class Database():
             bufferpool_index = len(self.bufferpool) - 1
         else:
             # Eviction
-            pass
+            # Find LRU unpinned page
+            for bufferpool_index in self.page_stack:
+                if self.bufferpool[bufferpool_index].pin == 0:
+                    break
+            if self.bufferpool[bufferpool_index].dirty:
+                self.evict_page(bufferpool_index)
+            self.bufferpool[bufferpool_index] = new_page
+            
         self.page_table[str(page_range)][str(page_index)][str(column_index)] = bufferpool_index
         return new_page
 
