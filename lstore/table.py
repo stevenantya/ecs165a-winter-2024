@@ -36,7 +36,7 @@ class Table:
         final_page_range = len(self.db.page_table) - 1
 
         if final_page_range >= 0:
-            final_base_page_index = len(self.db.page_table[str(final_page_range)]) - 1
+            final_base_page_index = len(self.db.page_table[str(final_page_range)]["base_pages"]) - 1
             final_row_page = self.db.get_page(final_page_range, final_base_page_index, config.INDIRECTION_COLUMN)
             final_row_num = final_row_page.get_num_record() 
             final_row_page.pin -= 1
@@ -45,7 +45,7 @@ class Table:
         if final_page_range < 0 or final_row_num == config.PAGE_MAX_ROWS:
             self.add_base_page()
             final_page_range = len(self.db.page_table) - 1
-            final_base_page_index = len(self.db.page_table[str(final_page_range)]) - 1
+            final_base_page_index = len(self.db.page_table[str(final_page_range)]["base_pages"]) - 1
             final_row_num = 0
 
         # Indirection
@@ -83,56 +83,75 @@ class Table:
         base_page_index = self.parseBasePageRID(rid)
         page_offset = self.parseRecord(rid)
 
-        target_page_range = self.page_ranges[page_range_index]
+        final_tail_page_index = len(self.db.page_table[str(page_range_index)]["tail_pages"]) - 1
 
         # Adds a new tail page if there isn't an existing one or the existing one is full
-        if not target_page_range['tail_pages'] or target_page_range['tail_pages'][-1][config.INDIRECTION_COLUMN].get_num_record() == config.PAGE_MAX_ROWS:
+        if final_tail_page_index >= 0:
+            final_tail_page = self.db.get_page(page_range_index, final_tail_page_index + config.PAGE_RANGE, config.INDIRECTION_COLUMN)
+            if final_tail_page.get_num_record() == config.PAGE_MAX_ROWS:
+                self.add_tail_page(page_range_index)
+                final_tail_page_index += 1
+                final_tail_page.pin -= 1
+                final_tail_page = self.db.get_page(page_range_index, final_tail_page_index + config.PAGE_RANGE, config.INDIRECTION_COLUMN)
+        else:
             self.add_tail_page(page_range_index)
+            final_tail_page_index += 1
+            final_tail_page = self.db.get_page(page_range_index, final_tail_page_index + config.PAGE_RANGE, config.INDIRECTION_COLUMN)
 
-        target_base_page = target_page_range['base_pages'][base_page_index]
-        target_tail_page = target_page_range['tail_pages'][-1]
 
         # The original indirection stored in the base record
-        previous_indirection = target_base_page[config.INDIRECTION_COLUMN][page_offset]
-        indirection_index = self.parseIndirection(previous_indirection)
+        base_indirection_page = self.db.get_page(page_range_index, base_page_index, config.INDIRECTION_COLUMN)
+        previous_indirection = base_indirection_page[page_offset]
 
-        if (indirection_index < config.PAGE_RANGE):
-            # First update
-            previous_tail_page = target_page_range['base_pages'][indirection_index]
-        else:
-            # Subsequent updates
-            previous_tail_page = target_page_range['tail_pages'][indirection_index - config.PAGE_RANGE]
-
-        # Update base record's indirection to points to the new tail record to be added
-        target_base_page[config.INDIRECTION_COLUMN][page_offset] = self.encode_indirection(len(target_page_range['tail_pages']) - 1 + config.PAGE_RANGE, target_tail_page[config.INDIRECTION_COLUMN].get_num_record())
+        # Update base record's indirection to point to the new tail record to be added
+        base_indirection_page[page_offset] = self.encode_indirection(final_tail_page_index + config.PAGE_RANGE, final_tail_page.get_num_record())
+        final_tail_page.pin -= 1
+        base_indirection_page.pin -= 1
 
         # Makes the latest tail record indirection point to the previus version
-        target_tail_page[config.INDIRECTION_COLUMN].add_record(previous_indirection)
+        target_indirection_page = self.db.get_page(page_range_index, final_tail_page_index + config.PAGE_RANGE, config.INDIRECTION_COLUMN)
+        target_indirection_page.add_record(previous_indirection)
+        target_indirection_page.pin -= 1
 
-        target_tail_page[config.TIMESTAMP_COLUMN].add_record(self.get_time())  # Timestamp
+        # Timestamp
+        target_timestamp_page = self.db.get_page(page_range_index, final_tail_page_index + config.PAGE_RANGE, config.TIMESTAMP_COLUMN)
+        target_timestamp_page.add_record(self.get_time())  
+        target_timestamp_page.pin -= 1
 
+        base_schema_page = self.db.get_page(page_range_index, base_page_index, config.SCHEMA_ENCODING_COLUMN)
         schema_encoding = 0
         for i in range(config.METACOLUMN_NUM, self.num_columns + config.METACOLUMN_NUM):
             field = input_data[i - config.METACOLUMN_NUM]
 
+            target_data_page = self.db.get_page(page_range_index, final_tail_page_index + config.PAGE_RANGE, i)
+
             # If no need to update field
-            if field == None:
+            if field is None:
                 # If there is previous update to this column
-                if self.extract_bit(target_base_page[config.SCHEMA_ENCODING_COLUMN][page_offset], self.num_columns - (i - config.METACOLUMN_NUM) - 1):
+                if self.extract_bit(base_schema_page[page_offset], self.num_columns - (i - config.METACOLUMN_NUM) - 1):
                     # Copy value from previous update
-                    target_tail_page[i].add_record(previous_tail_page[i][self.parseRecord(previous_indirection)])
+                    previous_data_page = self.db.get_page(page_range_index, self.parseIndirection(previous_indirection), i)
+                    target_data_page.add_record(previous_data_page[self.parseRecord(previous_indirection)]) 
                     schema_encoding += 1 << (self.num_columns - (i - config.METACOLUMN_NUM) - 1)
+                    previous_data_page.pin -= 1
                 else:
                     # Add null value
-                    target_tail_page[i].add_record(field)
+                    target_data_page.add_record(config.NULL_VAL)
             else:
                 schema_encoding += 1 << (self.num_columns - (i - config.METACOLUMN_NUM) - 1)
-                target_tail_page[i].add_record(field)
+                target_data_page.add_record(field)
+
+            target_data_page.pin -= 1
 
         # Update scheme encoding in base record
-        target_base_page[config.SCHEMA_ENCODING_COLUMN][page_offset] = schema_encoding
+        if base_schema_page[page_offset] != schema_encoding:
+            base_schema_page[page_offset] = schema_encoding
+        base_schema_page.pin -= 1
+
         # Add the schema encoding for the latest tail record
-        target_tail_page[config.SCHEMA_ENCODING_COLUMN].add_record(schema_encoding)
+        target_schema_page = self.db.get_page(page_range_index, final_tail_page_index + config.PAGE_RANGE, config.SCHEMA_ENCODING_COLUMN)
+        target_schema_page.add_record(schema_encoding)
+        target_schema_page.pin -= 1
 
         return True
 
@@ -141,33 +160,32 @@ class Table:
         base_page_index = self.parseBasePageRID(rid)
         page_offset = self.parseRecord(rid)
 
-        target_page_range = self.page_ranges[page_range_index]
-
-        target_base_page = target_page_range['base_pages'][base_page_index]
         # Points to the latest tail record
-        curr_indirection = target_base_page[config.INDIRECTION_COLUMN][page_offset]
+        base_indirection_page = self.db.get_page(page_range_index, base_page_index, config.INDIRECTION_COLUMN)
+        curr_indirection = base_indirection_page[page_offset]
+        base_indirection_page.pin -= 1
 
+        # Scan from latest version until specified version or base record
         for i in range(0 , version, -1):
             if self.parseIndirection(curr_indirection) < config.PAGE_RANGE:
                 break
-            curr_indirection = target_page_range['tail_pages'][self.parseIndirection(curr_indirection) - config.PAGE_RANGE][config.INDIRECTION_COLUMN][self.parseRecord(curr_indirection)]
-
-        # Find the target record's page
-        if self.parseIndirection(curr_indirection) < config.PAGE_RANGE:
-            target_page = target_base_page
-        else:
-            target_page = target_page_range['tail_pages'][self.parseIndirection(curr_indirection) - config.PAGE_RANGE]
+            tail_indirection_page = self.db.get_page(page_range_index, self.parseIndirection(curr_indirection), config.INDIRECTION_COLUMN)
+            curr_indirection = tail_indirection_page[self.parseRecord(curr_indirection)]
+            tail_indirection_page.pin -= 1
 
         rtn_record = []
         # Forms the return based on the projected_columns_index, only if it is 1 will it be appended
         for i in range(self.num_columns):
             if projected_columns_index[i]:
-                val = target_page[i + config.METACOLUMN_NUM][self.parseRecord(curr_indirection)]
-                                                           
-                if val != None:
-                    rtn_record.append(target_page[i + config.METACOLUMN_NUM][self.parseRecord(curr_indirection)])
+                target_data_page = self.db.get_page(page_range_index, self.parseIndirection(curr_indirection), i + config.METACOLUMN_NUM)
+                val = target_data_page[self.parseRecord(curr_indirection)]
+                target_data_page.pin -= 1
+                if val != config.NULL_VAL:
+                    rtn_record.append(val)
                 else:
-                    rtn_record.append(target_base_page[i + config.METACOLUMN_NUM][page_offset])
+                    base_data_page = self.db.get_page(page_range_index, base_page_index, i + config.METACOLUMN_NUM)
+                    rtn_record.append(base_data_page[page_offset])
+                    base_data_page.pin -= 1
 
         return rtn_record
 
@@ -176,26 +194,25 @@ class Table:
         base_page_index = self.parseBasePageRID(rid)
         page_offset = self.parseRecord(rid)
 
-        target_page_range = self.page_ranges[page_range_index]
-        target_base_page = target_page_range['base_pages'][base_page_index]
-
         # Sets indirection of base record to NULL_VAL to imply deletion
-        target_base_page[config.INDIRECTION_COLUMN][page_offset] = config.NULL_VAL
+        base_indirection_page = self.db.get_page(page_range_index, base_page_index, config.INDIRECTION_COLUMN)
+        base_indirection_page[page_offset] = config.NULL_VAL
+        base_indirection_page.pin -= 1
 
         # Remove the rid of this record from index
-        del self.index.indices[self.key][target_base_page[self.key + config.METACOLUMN_NUM][page_offset]]
+        base_key_page = self.db.get_page(page_range_index, base_page_index, self.key + config.METACOLUMN_NUM)
+        del self.index.indices[self.key][base_key_page[page_offset]]
+        base_key_page.pin -= 1
 
     def add_base_page(self):
         # If no existing page range or current page range is full of base page, create new page range
         if not self.db.page_table or len(self.db.page_table[str(len(self.db.page_table)-1)]) == config.PAGE_RANGE:
-            self.db.page_table[str(len(self.db.page_table))] = {}
+            self.db.page_table[str(len(self.db.page_table))] = {"base_pages": {}, "tail_pages": {}}
 
-        self.db.page_table[str(len(self.db.page_table)-1)]["0"] = {str(i) : -1 for i in range(self.num_columns + config.METACOLUMN_NUM)}
+        self.db.page_table[str(len(self.db.page_table)-1)]["base_pages"][str(len(self.db.page_table[str(len(self.db.page_table)-1)]["base_pages"]))] = {str(i) : -1 for i in range(self.num_columns + config.METACOLUMN_NUM)}
 
     def add_tail_page(self, page_range_index):
-        target_page_range = self.page_ranges[page_range_index]
-        new_tail_page = [Page() for _ in range(self.num_columns + config.METACOLUMN_NUM)]
-        target_page_range['tail_pages'].append(new_tail_page)
+        self.db.page_table[str(page_range_index)]["tail_pages"][str(len(self.db.page_table[str(page_range_index)]["tail_pages"]))] = {str(i) : -1 for i in range(self.num_columns + config.METACOLUMN_NUM)}
 
     def display(self):
         for pr in self.page_ranges:

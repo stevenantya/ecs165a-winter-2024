@@ -18,8 +18,6 @@ class Index:
         # One index for each table. All our empty initially.
         # index corresponds with column number
         self.indices = [None] *  table.num_columns
-        # key column index which is indexed by default
-        self.create_index(self.table.key)
 
     """
     # returns the location of all records with the given value on column "column"

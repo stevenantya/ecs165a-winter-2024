@@ -18,4 +18,9 @@ query = Query(grades_table)
 
 query.insert(1, 2, 3, 4, 5)
 
+query.update(1, *[0, 0, 0, 0, 0])
+
+print(query.select(1, 0, [1, 1, 1, 1, 1])[0].columns)
+print(query.select_version(1, 0, [1, 1, 1, 1, 1], -1)[0].columns)
+
 db.close()
