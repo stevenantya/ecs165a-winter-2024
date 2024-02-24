@@ -39,6 +39,7 @@ class Database():
         for i, page in enumerate(self.bufferpool):
             if page.dirty:
                 self.evict_page(i)
+            self.reset_page_table_entry(i)
 
         self.save_page_table()
         self.save_system_catalog()
@@ -130,17 +131,23 @@ class Database():
             for bufferpool_index in self.page_stack:
                 if self.bufferpool[bufferpool_index].pin == 0:
                     break
-            # Overwrite existing file is evicting dirty page
+
+            # Reset the existing page's bufferpool index in page table to -1
+            self.reset_page_table_entry(bufferpool_index)
+        
+            # Overwrite existing file if evicting dirty page
             if self.bufferpool[bufferpool_index].dirty:
                 self.evict_page(bufferpool_index)
 
             self.bufferpool[bufferpool_index] = new_page
+            self.page_stack.remove(bufferpool_index)
         self.page_stack.append(bufferpool_index)
 
         if page_index < config.PAGE_RANGE:
             self.page_table[str(page_range)]["base_pages"][str(page_index)][str(column_index)] = bufferpool_index
         else:
             self.page_table[str(page_range)]["tail_pages"][str(page_index - config.PAGE_RANGE)][str(column_index)] = bufferpool_index
+
         return new_page
 
     def evict_page(self, buffer_index):
@@ -153,10 +160,12 @@ class Database():
             binary_data = struct.pack('q' * target_page.num_records, *target_page.rows[:target_page.num_records])
             file.write(binary_data)
 
-        if int(target_page.page_name[target_page.page_name.index('p')+1:target_page.page_name.index('c')]) < config.PAGE_RANGE:
-            self.page_table[target_page.page_name[1:target_page.page_name.index('p')]]["base_pages"][target_page.page_name[target_page.page_name.index('p')+1:target_page.page_name.index('c')]][target_page.page_name[target_page.page_name.index('c')+1:]] = -1
+    def reset_page_table_entry(self, bufferpool_index):
+        existing_page_name = self.bufferpool[bufferpool_index].page_name
+        if int(existing_page_name[existing_page_name.index('p')+1:existing_page_name.index('c')]) < config.PAGE_RANGE:
+            self.page_table[existing_page_name[1:existing_page_name.index('p')]]["base_pages"][existing_page_name[existing_page_name.index('p')+1:existing_page_name.index('c')]][existing_page_name[existing_page_name.index('c')+1:]] = -1
         else:
-            self.page_table[target_page.page_name[1:target_page.page_name.index('p')]]["tail_pages"][str(int(target_page.page_name[target_page.page_name.index('p')+1:target_page.page_name.index('c')]) - config.PAGE_RANGE)][target_page.page_name[target_page.page_name.index('c')+1:]] = -1
+            self.page_table[existing_page_name[1:existing_page_name.index('p')]]["tail_pages"][str(int(existing_page_name[existing_page_name.index('p')+1:existing_page_name.index('c')]) - config.PAGE_RANGE)][existing_page_name[existing_page_name.index('c')+1:]] = -1
 
     def save_page_table(self):
         file_path = self.file_directory + "/" + "page_table.json"
