@@ -72,7 +72,7 @@ class Table:
         # Add the new record's rid to index
         self.index.indices[self.key][input_data[self.key]] = self.encode_RID(final_page_range, final_base_page_index, final_row_num)
         
-        # m2: Create inserted record and create index for that record 
+        # Create inserted record and create index for that record 
         # print(self.index.indices[self.key][input_data[self.key]])
         # newRecord = Record(self.index.indices[self.key][input_data[self.key]], self.key, input_data[1:])
         self.index.insert_record(self.index.indices[self.key][input_data[self.key]], input_data)
