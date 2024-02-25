@@ -72,7 +72,7 @@ class Index:
                 #print(rid)
         #print(self.indices)
     """
-    delete all rids in the dict with a specified rid value. Ex. 1: [1,2,3,4] becomes 1:[2,3,4] if specified 1
+    delete all rids with a specified rid value. Ex. 1: [1,2,3,4] becomes 1:[2,3,4] if specified 1
     Used in conjunction with insert_record to update_record:
     1. remove all mentions of a specific rid (removed all mentionf of a record)
     2. inserts the record with new values using insert_record, simulating an update
