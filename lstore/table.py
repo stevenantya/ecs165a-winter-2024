@@ -74,14 +74,29 @@ class Table:
 
         return True
 
-    def update_record(self, rid, input_data):
+    def update_record(self, rid, input_data, layer = 0):
         # Existing record with the same key, so forbid adding a duplicate record
-        if input_data[self.key] in self.index.indices[self.key]:
+        if input_data[self.key] in self.index.indices[self.key] and self.index.indices[self.key][input_data[self.key]] != rid:
             return False
 
         page_range_index = self.parsePageRangeRID(rid)
         base_page_index = self.parseBasePageRID(rid)
         page_offset = self.parseRecord(rid)
+
+        # Backup the original data if updated for the first time
+        base_schema_page = self.db.get_page(page_range_index, base_page_index, config.SCHEMA_ENCODING_COLUMN)
+        old_values = []
+        for i in range(config.METACOLUMN_NUM, self.num_columns + config.METACOLUMN_NUM):
+            field = input_data[i - config.METACOLUMN_NUM]
+            if field is not None and not self.extract_bit(base_schema_page[page_offset], self.num_columns - (i - config.METACOLUMN_NUM) - 1):
+                base_data_page = self.db.get_page(page_range_index, base_page_index, i)
+                old_values.append(base_data_page[page_offset])
+                base_data_page.pin -= 1
+            else:
+                old_values.append(None)
+
+        if layer == 0 and old_values != [None] * self.num_columns:
+            self.update_record(rid, old_values, 1)
 
         final_tail_page_index = len(self.db.page_table[str(page_range_index)]["tail_pages"]) - 1
 
@@ -118,7 +133,7 @@ class Table:
         target_timestamp_page.add_record(self.get_time())  
         target_timestamp_page.pin -= 1
 
-        base_schema_page = self.db.get_page(page_range_index, base_page_index, config.SCHEMA_ENCODING_COLUMN)
+        
         schema_encoding = 0
         for i in range(config.METACOLUMN_NUM, self.num_columns + config.METACOLUMN_NUM):
             field = input_data[i - config.METACOLUMN_NUM]
