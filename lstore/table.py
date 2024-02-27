@@ -18,7 +18,7 @@ class Table:
         self.name = name
         self.key = key
         self.num_columns = num_columns
-
+        self.tail_page_merge_stack = {}
         self.index = Index(self)
 
     def __del__(self):
@@ -133,6 +133,11 @@ class Table:
         target_timestamp_page.add_record(self.get_time())  
         target_timestamp_page.pin -= 1
 
+        # BaseID
+        base_ID_page = self.db.get_page(page_range_index, final_tail_page_index + config.PAGE_RANGE , config.BASE_ID_COLUMN)
+        base_ID_page.add_record(rid)
+        base_ID_page.pin -= 1
+
         
         schema_encoding = 0
         for i in range(config.METACOLUMN_NUM, self.num_columns + config.METACOLUMN_NUM):
@@ -166,7 +171,18 @@ class Table:
         # Add the schema encoding for the latest tail record
         target_schema_page = self.db.get_page(page_range_index, final_tail_page_index + config.PAGE_RANGE, config.SCHEMA_ENCODING_COLUMN)
         target_schema_page.add_record(schema_encoding)
+        target_tail_num_records = target_schema_page.get_num_record()
         target_schema_page.pin -= 1
+
+        # Append the full tail page to the queue and initiate merging once size of queue pass max size
+        if target_tail_num_records == config.PAGE_MAX_ROWS:
+            if page_range_index in self.tail_page_merge_stack:
+                self.tail_page_merge_stack[page_range_index].append(final_tail_page_index + config.PAGE_RANGE)
+            else:
+                self.tail_page_merge_stack[page_range_index] = [final_tail_page_index + config.PAGE_RANGE]
+
+            if len(self.tail_page_merge_stack[page_range_index]) == config.MERGE_STACK_SIZE:
+                self.merge(page_range_index)
 
         return True
 
@@ -180,13 +196,20 @@ class Table:
         curr_indirection = base_indirection_page[page_offset]
         base_indirection_page.pin -= 1
 
-        # Scan from latest version until specified version or base record
+        # Set target to base page if latest version is already in base page after merging
+        if version == 0 and curr_indirection <= self.db.page_TPS[str(page_range_index)][str(base_page_index)]:
+            curr_indirection = self.encode_indirection(base_page_index, page_offset)
+
+        # Scan from latest version until specified version or reach first version in tail page
         for i in range(0 , version, -1):
-            if self.parseIndirection(curr_indirection) < config.PAGE_RANGE:
-                break
             tail_indirection_page = self.db.get_page(page_range_index, self.parseIndirection(curr_indirection), config.INDIRECTION_COLUMN)
+            prev = curr_indirection
             curr_indirection = tail_indirection_page[self.parseRecord(curr_indirection)]
             tail_indirection_page.pin -= 1
+
+            if self.parseIndirection(curr_indirection) < config.PAGE_RANGE:
+                curr_indirection = prev
+                break
 
         rtn_record = []
         # Forms the return based on the projected_columns_index, only if it is 1 will it be appended
@@ -223,22 +246,88 @@ class Table:
         # If no existing page range or current page range is full of base page, create new page range
         if not self.db.page_table or len(self.db.page_table[str(len(self.db.page_table)-1)]) == config.PAGE_RANGE:
             self.db.page_table[str(len(self.db.page_table))] = {"base_pages": {}, "tail_pages": {}}
+            self.db.page_TPS[str(len(self.db.page_table) - 1)] = {}
 
         self.db.page_table[str(len(self.db.page_table)-1)]["base_pages"][str(len(self.db.page_table[str(len(self.db.page_table)-1)]["base_pages"]))] = {str(i) : -1 for i in range(self.num_columns + config.METACOLUMN_NUM)}
+        self.db.page_TPS[str(len(self.db.page_table)-1)][str(len(self.db.page_table[str(len(self.db.page_table)-1)]["base_pages"]) - 1)] = -1
 
     def add_tail_page(self, page_range_index):
         self.db.page_table[str(page_range_index)]["tail_pages"][str(len(self.db.page_table[str(page_range_index)]["tail_pages"]))] = {str(i) : -1 for i in range(self.num_columns + config.METACOLUMN_NUM)}
 
-    def display(self):
-        for pr in self.page_ranges:
-            for base_page in pr['base_pages']:
-                for i in range(base_page[config.INDIRECTION_COLUMN].get_num_record()):  # Assuming get_num_record() method exists
-                    print('    '.join(f'{base_page[j][i]:016x}' for j in range(self.num_columns + config.METACOLUMN_NUM)))
-                print('-' * 150)
-            for tail_page in pr['tail_pages']:
-                for i in range(tail_page[config.INDIRECTION_COLUMN].get_num_record()):  # Assuming get_num_record() method exists
-                    print('    '.join(f'{tail_page[j][i]:016x}' for j in range(self.num_columns + config.METACOLUMN_NUM)))
-                print('-' * 150)
+    def merge(self, page_range_index):
+        base_rid_set = set()
+        base_page_set = set()
+
+        # Obtain list of rids and base pages to merge
+        for tail_page_index in self.tail_page_merge_stack[page_range_index]:
+            tail_baseID_page = self.db.get_page(page_range_index, tail_page_index, config.BASE_ID_COLUMN)
+            for baseID in tail_baseID_page.rows:
+                base_rid_set.add(baseID)
+                base_page_set.add(self.parseIndirection(baseID))
+            tail_baseID_page.pin -= 1
+        
+        # Load copies of needed base_pages
+        base_page_copies = {}
+        for base_page_index in base_page_set:
+            base_page_copies[base_page_index] = []
+            for i in range(self.num_columns + config.METACOLUMN_NUM):
+                base_page_copy = self.db.read_page(page_range_index, base_page_index, i)
+                base_page_copy.pin -= 1
+                base_page_copies[base_page_index].append(base_page_copy)
+
+        tail_page_stack_size = len(self.tail_page_merge_stack[page_range_index])
+        # Merge tail records to base pages copies from bottom up
+        for i in range(tail_page_stack_size - 1, -1, -1):
+            tail_page_index = self.tail_page_merge_stack[page_range_index][i]
+            tail_baseID_page = self.db.get_page(page_range_index, tail_page_index, config.BASE_ID_COLUMN)
+            for r in range(config.PAGE_MAX_ROWS - 1, -1, -1):
+                base_rid = tail_baseID_page[r]
+                if base_rid in base_rid_set:
+                    base_page_index = self.parseIndirection(base_rid)
+                    page_offset = self.parseRecord(base_rid)
+                    schema = base_page_copies[base_page_index][config.SCHEMA_ENCODING_COLUMN][page_offset]
+
+                    # # Timestamp
+                    # base_page_copies[base_page_index][config.TIMESTAMP_COLUMN][page_offset] = self.get_time()
+                    # # Schema encoding
+                    # base_page_copies[base_page_index][config.SCHEMA_ENCODING_COLUMN][page_offset] = 0
+
+                    for c in range(config.METACOLUMN_NUM, self.num_columns + config.METACOLUMN_NUM):
+                        if self.extract_bit(schema, self.num_columns - (c - config.METACOLUMN_NUM) - 1):
+                            tail_data_page = self.db.get_page(page_range_index, tail_page_index, c)
+                            base_page_copies[base_page_index][c][page_offset] = tail_data_page[r]
+                            tail_data_page.pin -= 1
+
+                    # Update TPS
+                    self.db.page_TPS[str(page_range_index)][str(base_page_index)] = max(self.db.page_TPS[str(page_range_index)][str(base_page_index)], self.encode_indirection(tail_page_index, r))
+
+                    base_rid_set.remove(base_rid)
+
+            tail_baseID_page.pin -= 1
+            self.tail_page_merge_stack[page_range_index].remove(tail_page_index)
+
+        # Look for dirty pages in base_page_copies
+        for base_page_index in base_page_copies:
+            for i, base_page_page in enumerate(base_page_copies[base_page_index]):
+                if base_page_page.dirty:
+                    bufferpool_index = self.db.page_table[str(page_range_index)]["base_pages"][str(base_page_index)][str(i)]
+                    # Evict LRU 
+                    if bufferpool_index == -1:
+                        # Eviction
+                        # Find LRU unpinned page
+                        for bufferpool_index in self.db.page_stack:
+                            if self.db.bufferpool[bufferpool_index].pin == 0:
+                                break
+
+                        # Reset the existing page's bufferpool index in page table to -1
+                        self.db.reset_page_table_entry(bufferpool_index)
+                    
+                        # Overwrite existing file if evicting dirty page
+                        if self.db.bufferpool[bufferpool_index].dirty:
+                            self.db.evict_page(bufferpool_index)
+
+                    self.db.bufferpool[bufferpool_index] = base_page_page
+                    self.db.page_table[str(page_range_index)]["base_pages"][str(base_page_index)][str(i)] = bufferpool_index
 
     # Extract the leftmost 48 bits of rid to get page range
     def parsePageRangeRID(self, rid):

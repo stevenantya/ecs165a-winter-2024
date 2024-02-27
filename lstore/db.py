@@ -15,6 +15,7 @@ class Database():
         self.bufferpool = []
         self.page_stack = []
         self.page_table = {}
+        self.page_TPS = {}
         self.system_catalog = {}
 
     # Not required for milestone1
@@ -32,6 +33,7 @@ class Database():
 
         self.load_page_table()
         self.load_system_catalog()
+        self.load_TPS()
         for name, info in self.system_catalog.items():
             self.create_table(name, info[0], info[1])
 
@@ -44,6 +46,7 @@ class Database():
         self.save_page_table()
         self.save_system_catalog()
         self.save_indexes()
+        self.save_TPS()
 
     """
     # Creates a new table
@@ -105,20 +108,7 @@ class Database():
             self.page_stack.append(bufferpool_index)
             return page
         else:
-            new_page = Page()
-            new_page.page_name = f"r{page_range}p{page_index}c{column_index}"
-            new_page.pin += 1
-
-            file_path = self.file_directory + "/Pages/" + new_page.page_name + ".bin"
-            if os.path.exists(file_path):
-                # There is existing file of the page
-                with open(file_path, 'rb') as file:
-                    binary_data = file.read()
-                num_records = len(binary_data) // struct.calcsize('q')
-                for i in range(num_records):
-                    record = struct.unpack('q', binary_data[i * struct.calcsize('q'):(i + 1) * struct.calcsize('q')])[0]
-                    new_page.add_record(record)
-                new_page.dirty = 0
+            new_page = self.read_page(page_range, page_index, column_index)
 
         # Insert new page into bufferpool
         if len(self.bufferpool) < config.BUFFERPOOL_SIZE:
@@ -147,6 +137,25 @@ class Database():
             self.page_table[str(page_range)]["base_pages"][str(page_index)][str(column_index)] = bufferpool_index
         else:
             self.page_table[str(page_range)]["tail_pages"][str(page_index - config.PAGE_RANGE)][str(column_index)] = bufferpool_index
+
+        return new_page
+
+    def read_page(self, page_range, page_index, column_index):
+        new_page = Page()
+        new_page.page_name = f"r{page_range}p{page_index}c{column_index}"
+        new_page.pin += 1
+
+        file_path = self.file_directory + "/Pages/" + new_page.page_name + ".bin"
+
+        if os.path.exists(file_path):
+            # There is existing file of the page
+            with open(file_path, 'rb') as file:
+                binary_data = file.read()
+            num_records = len(binary_data) // struct.calcsize('q')
+            for i in range(num_records):
+                record = struct.unpack('q', binary_data[i * struct.calcsize('q'):(i + 1) * struct.calcsize('q')])[0]
+                new_page.add_record(record)
+            new_page.dirty = 0
 
         return new_page
 
@@ -221,4 +230,17 @@ class Database():
                     index_loaded = True
 
         return index_loaded
+
+    def save_TPS(self):
+        file_path = self.file_directory + "/" + "TPS.json"
+
+        with open(file_path, "w") as file:
+            data = json.dumps(self.page_TPS, indent=4)
+            file.write(data)
             
+    def load_TPS(self):
+        file_path = self.file_directory + "/" + "TPS.json"
+
+        if os.path.exists(file_path):
+            with open(file_path, "r") as file:
+                self.page_TPS = json.loads(file.read())
