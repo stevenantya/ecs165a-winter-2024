@@ -58,6 +58,10 @@ for _ in range(number_of_updates):
             updated_columns[i] = value
             # update our test directory
             records[key][i] = value
+
+        if key == 92106940:
+            print("HEEEELP")
+
         query.update(key, *updated_columns)
         record = query.select(key, 0, [1, 1, 1, 1, 1])[0]
         error = False

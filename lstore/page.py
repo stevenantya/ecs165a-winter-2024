@@ -1,4 +1,5 @@
 from . import config
+import copy
 
 class Page:
     def __init__(self):
@@ -41,3 +42,6 @@ class Page:
         # Python has automatic garbage collection,
         # so explicit cleanup is not necessary.
         pass
+
+    def copy(self):
+        return copy.deepcopy(self)

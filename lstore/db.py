@@ -38,6 +38,12 @@ class Database():
             self.create_table(name, info[0], info[1])
 
     def close(self):
+        # Clear the merge stack before closing
+        for page_range_index in self.tables[0].tail_page_merge_stack:
+            if self.tables[0].tail_page_merge_stack[page_range_index]:
+                self.tables[0].merge(page_range_index)
+
+
         for i, page in enumerate(self.bufferpool):
             if page.dirty:
                 self.evict_page(i)

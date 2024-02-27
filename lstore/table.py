@@ -271,11 +271,15 @@ class Table:
         for base_page_index in base_page_set:
             base_page_copies[base_page_index] = []
             for i in range(self.num_columns + config.METACOLUMN_NUM):
-                base_page_copy = self.db.read_page(page_range_index, base_page_index, i)
+                if self.db.page_table[str(page_range_index)]["base_pages"][str(base_page_index)][str(i)] == -1:
+                    base_page_copy = self.db.read_page(page_range_index, base_page_index, i)
+                else:
+                    base_page_copy = self.db.bufferpool[self.db.page_table[str(page_range_index)]["base_pages"][str(base_page_index)][str(i)]].copy()
                 base_page_copy.pin -= 1
                 base_page_copies[base_page_index].append(base_page_copy)
 
         tail_page_stack_size = len(self.tail_page_merge_stack[page_range_index])
+        page_TPS = self.db.page_TPS.copy()
         # Merge tail records to base pages copies from bottom up
         for i in range(tail_page_stack_size - 1, -1, -1):
             tail_page_index = self.tail_page_merge_stack[page_range_index][i]
@@ -299,7 +303,7 @@ class Table:
                             tail_data_page.pin -= 1
 
                     # Update TPS
-                    self.db.page_TPS[str(page_range_index)][str(base_page_index)] = max(self.db.page_TPS[str(page_range_index)][str(base_page_index)], self.encode_indirection(tail_page_index, r))
+                    page_TPS[str(page_range_index)][str(base_page_index)] = max(page_TPS[str(page_range_index)][str(base_page_index)], self.encode_indirection(tail_page_index, r))
 
                     base_rid_set.remove(base_rid)
 
@@ -328,6 +332,9 @@ class Table:
 
                     self.db.bufferpool[bufferpool_index] = base_page_page
                     self.db.page_table[str(page_range_index)]["base_pages"][str(base_page_index)][str(i)] = bufferpool_index
+
+        # Replace the outdated TPS
+        self.db.page_TPS = page_TPS
 
     # Extract the leftmost 48 bits of rid to get page range
     def parsePageRangeRID(self, rid):
