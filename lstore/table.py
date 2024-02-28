@@ -189,6 +189,7 @@ class Table:
                 pass
                 # merge_thread = threading.Thread(target = self.merge, args=(page_range_index,))
                 # merge_thread.start()
+                self.merge(page_range_index)
 
         return True
 
