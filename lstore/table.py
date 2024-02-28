@@ -73,6 +73,8 @@ class Table:
         # Add the new record's rid to index
         self.index.indices[self.key][input_data[self.key]] = self.encode_RID(final_page_range, final_base_page_index, final_row_num)
 
+        # Add the new record's columns to the index
+        self.index.insert_record(self.index.indices[self.key][input_data[self.key]], input_data)
         return True
 
     def update_record(self, rid, input_data, layer = 0):
