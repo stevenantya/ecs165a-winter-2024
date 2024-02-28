@@ -24,7 +24,7 @@ class Query:
         if not rid:
             return False
         
-        self.table.delete_record(rid)
+        self.table.delete_record(rid[0])
         return True
     
     """
@@ -58,15 +58,18 @@ class Query:
     # Assume that select will never be called on a key that doesn't exist
     """
     def select_version(self, search_key, search_key_index, projected_columns_index, relative_version):
-        rid = self.table.index.locate(search_key_index, search_key)
+        rid_list = self.table.index.locate(search_key_index, search_key)
 
-        if rid is False:
+        if rid_list is False:
             return False
 
-        rtn = self.table.get_record(rid, projected_columns_index, relative_version)
-        rtn = Record(0, 0, rtn)
+        rtn = []
 
-        return [rtn]
+        for rid in rid_list:
+            columns = self.table.get_record(rid, projected_columns_index, relative_version)
+            rtn.append(Record(0, 0, columns))
+
+        return rtn
     
     """
     # Update a record with specified key and columns
@@ -74,7 +77,7 @@ class Query:
     # Returns False if no records exist with given key or if the target record cannot be accessed due to 2PL locking
     """
     def update(self, primary_key, *columns):
-        rid = self.table.index.locate(self.table.key, primary_key)
+        rid = self.table.index.locate(self.table.key, primary_key)[0]
 
         return self.table.update_record(rid, columns)
 

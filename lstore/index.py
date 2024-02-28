@@ -64,19 +64,17 @@ class Index:
     Index is a list of dictionaries, for value k: <k, list of rids of data records with search key k> 
     """ 
     def insert_record(self, rid, data):
-        for i in range(1, self.table.num_columns):
-            #print(self.indices)
-            #print(self.indices[i])
-            if self.indices[i] != None:
-                if data[i] in self.indices[i]:
-                    self.indices[i][data[i]].append(rid)
+        for i in range(self.table.num_columns):
+            if data[i] is not None:
+                if self.indices[i] != None:
+                    if data[i] in self.indices[i]:
+                        self.indices[i][data[i]].append(rid)
+                    else:
+                        self.indices[i][data[i]] = [rid]
                 else:
+                    self.create_index(i)
                     self.indices[i][data[i]] = [rid]
-            else:
-                self.create_index(i)
-                self.indices[i][data[i]]= [rid]
-                #print(rid)
-        #print(self.indices)
+                
     """
     delete all rids in dict with a specified rid value. Ex. 1: [1,2,3,4] becomes 1:[2,3,4] if specified 1
     Used in conjunction with insert_record to update_record:
@@ -84,9 +82,10 @@ class Index:
     2. inserts the record with new values using insert_record, simulating an update
     not implemented in table class yet of update_record, WIP
     """
-    def delete_rid(self, rid):
-        for i in range(1, self.table.num_columns):
-            for key in self.indices[i]:
-                if rid in self.indices[i][key]:
-                    self.indices[i][key].remove(rid)
+    def delete_rid(self, rid, columns):
+        for i in range(self.table.num_columns):
+            if columns[i] is not None:
+                for key in self.indices[i]:
+                    if rid in self.indices[i][key]:
+                        self.indices[i][key].remove(rid)
                 

@@ -70,11 +70,8 @@ class Table:
             data_page.add_record(input_data[i - config.METACOLUMN_NUM])
             data_page.pin -= 1
 
-        # Add the new record's rid to index
-        self.index.indices[self.key][input_data[self.key]] = self.encode_RID(final_page_range, final_base_page_index, final_row_num)
-
-        # Add the new record's columns to the index
-        self.index.insert_record(self.index.indices[self.key][input_data[self.key]], input_data)
+        rid = self.encode_RID(final_page_range, final_base_page_index, final_row_num)
+        self.index.insert_record(rid, input_data)
         return True
 
     def update_record(self, rid, input_data, layer = 0):
@@ -177,6 +174,10 @@ class Table:
         target_tail_num_records = target_schema_page.get_num_record()
         target_schema_page.pin -= 1
 
+        # Update the indexes to reflect changes to this record
+        self.index.delete_rid(rid, input_data)
+        self.index.insert_record(rid, input_data)
+
         # Append the full tail page to the queue and initiate merging once size of queue pass max size
         if target_tail_num_records == config.PAGE_MAX_ROWS:
             if page_range_index in self.tail_page_merge_stack:
@@ -185,8 +186,9 @@ class Table:
                 self.tail_page_merge_stack[page_range_index] = [final_tail_page_index + config.PAGE_RANGE]
 
             if len(self.tail_page_merge_stack[page_range_index]) == config.MERGE_STACK_SIZE:
-                merge_thread = threading.Thread(target = self.merge, args=(page_range_index,))
-                merge_thread.start()
+                pass
+                # merge_thread = threading.Thread(target = self.merge, args=(page_range_index,))
+                # merge_thread.start()
 
         return True
 
@@ -242,9 +244,7 @@ class Table:
         base_indirection_page.pin -= 1
 
         # Remove the rid of this record from index
-        base_key_page = self.db.get_page(page_range_index, base_page_index, self.key + config.METACOLUMN_NUM)
-        del self.index.indices[self.key][base_key_page[page_offset]]
-        base_key_page.pin -= 1
+        self.index.delete_rid(rid, [1] * self.num_columns)
 
     def add_base_page(self):
         # If no existing page range or current page range is full of base page, create new page range
