@@ -64,7 +64,7 @@ for key in keys:
         if column != updated_records[key][i]:
             error = True
     if error:
-        print('select error on', key, ':', record, ', correct:', records[key])
+        print('select error on', key, ':', record, ', correct:', updated_records[key])
 print("Select for version 0 finished")
 
 for i in range(0, number_of_aggregates):

@@ -4,6 +4,7 @@ from time import time
 from .page import Page
 from . import config
 import math
+import threading
 
 class Record:
 
@@ -182,7 +183,8 @@ class Table:
                 self.tail_page_merge_stack[page_range_index] = [final_tail_page_index + config.PAGE_RANGE]
 
             if len(self.tail_page_merge_stack[page_range_index]) == config.MERGE_STACK_SIZE:
-                self.merge(page_range_index)
+                merge_thread = threading.Thread(target = self.merge, args=(page_range_index,))
+                merge_thread.start()
 
         return True
 
@@ -259,7 +261,8 @@ class Table:
         base_page_set = set()
 
         # Obtain list of rids and base pages to merge
-        for tail_page_index in self.tail_page_merge_stack[page_range_index]:
+        for i in range(config.MERGE_STACK_SIZE):
+            tail_page_index = self.tail_page_merge_stack[page_range_index][i]
             tail_baseID_page = self.db.get_page(page_range_index, tail_page_index, config.BASE_ID_COLUMN)
             for baseID in tail_baseID_page.rows:
                 base_rid_set.add(baseID)
