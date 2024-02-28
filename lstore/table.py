@@ -186,7 +186,6 @@ class Table:
                 self.tail_page_merge_stack[page_range_index] = [final_tail_page_index + config.PAGE_RANGE]
 
             if len(self.tail_page_merge_stack[page_range_index]) == config.MERGE_STACK_SIZE:
-                pass
                 # merge_thread = threading.Thread(target = self.merge, args=(page_range_index,))
                 # merge_thread.start()
                 self.merge(page_range_index)
