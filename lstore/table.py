@@ -22,6 +22,8 @@ class Table:
         self.tail_page_merge_stack = {}
         self.index = Index(self)
 
+        self.lock = threading.Lock()
+
     def __del__(self):
         pass  # Destructor logic here if needed
 
@@ -35,6 +37,8 @@ class Table:
 
         # Get to the first empty record inside a bottomost page range's bottomost base page
         final_page_range = len(self.db.page_table) - 1
+
+        self.lock.acquire()
 
         if final_page_range >= 0:
             final_base_page_index = len(self.db.page_table[str(final_page_range)]["base_pages"]) - 1
@@ -70,6 +74,8 @@ class Table:
             data_page.add_record(input_data[i - config.METACOLUMN_NUM])
             data_page.pin -= 1
 
+        self.lock.release()
+
         rid = self.encode_RID(final_page_range, final_base_page_index, final_row_num)
         self.index.insert_record(rid, input_data)
         return True
@@ -83,6 +89,8 @@ class Table:
         base_page_index = self.parseBasePageRID(rid)
         page_offset = self.parseRecord(rid)
 
+        self.lock.acquire()
+
         # Backup the original data if updated for the first time
         base_schema_page = self.db.get_page(page_range_index, base_page_index, config.SCHEMA_ENCODING_COLUMN)
         old_values = []
@@ -95,8 +103,12 @@ class Table:
             else:
                 old_values.append(None)
 
+        self.lock.release()
+
         if layer == 0 and old_values != [None] * self.num_columns:
             self.update_record(rid, old_values, 1)
+
+        self.lock.acquire()
 
         final_tail_page_index = len(self.db.page_table[str(page_range_index)]["tail_pages"]) - 1
 
@@ -174,6 +186,8 @@ class Table:
         target_tail_num_records = target_schema_page.get_num_record()
         target_schema_page.pin -= 1
 
+        self.lock.release()
+
         # Update the indexes to reflect changes to this record
         self.index.delete_rid(rid, input_data)
         self.index.insert_record(rid, input_data)
@@ -186,9 +200,9 @@ class Table:
                 self.tail_page_merge_stack[page_range_index] = [final_tail_page_index + config.PAGE_RANGE]
 
             if len(self.tail_page_merge_stack[page_range_index]) == config.MERGE_STACK_SIZE:
-                # merge_thread = threading.Thread(target = self.merge, args=(page_range_index,))
-                # merge_thread.start()
-                self.merge(page_range_index)
+                merge_thread = threading.Thread(target = self.merge, args=(page_range_index,))
+                merge_thread.start()
+                # self.merge(page_range_index)
 
         return True
 
@@ -196,6 +210,8 @@ class Table:
         page_range_index = self.parsePageRangeRID(rid)
         base_page_index = self.parseBasePageRID(rid)
         page_offset = self.parseRecord(rid)
+
+        self.lock.acquire()
 
         # Points to the latest tail record
         base_indirection_page = self.db.get_page(page_range_index, base_page_index, config.INDIRECTION_COLUMN)
@@ -231,6 +247,8 @@ class Table:
                     rtn_record.append(base_data_page[page_offset])
                     base_data_page.pin -= 1
 
+        self.lock.release()
+
         return rtn_record
 
     def delete_record(self, rid):
@@ -238,10 +256,14 @@ class Table:
         base_page_index = self.parseBasePageRID(rid)
         page_offset = self.parseRecord(rid)
 
+        self.lock.acquire()
+
         # Sets indirection of base record to NULL_VAL to imply deletion
         base_indirection_page = self.db.get_page(page_range_index, base_page_index, config.INDIRECTION_COLUMN)
         base_indirection_page[page_offset] = config.NULL_VAL
         base_indirection_page.pin -= 1
+
+        self.lock.release()
 
         # Remove the rid of this record from index
         self.index.delete_rid(rid, [1] * self.num_columns)
@@ -261,6 +283,8 @@ class Table:
     def merge(self, page_range_index):
         base_rid_set = set()
         base_page_set = set()
+
+        self.lock.acquire()
 
         # Obtain list of rids and base pages to merge
         for i in range(config.MERGE_STACK_SIZE):
@@ -340,6 +364,8 @@ class Table:
 
         # Replace the outdated TPS
         self.db.page_TPS = page_TPS
+
+        self.lock.release()
 
     # Extract the leftmost 48 bits of rid to get page range
     def parsePageRangeRID(self, rid):
