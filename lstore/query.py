@@ -61,7 +61,7 @@ class Query:
         rid_list = self.table.index.locate(search_key_index, search_key)
 
         if rid_list is False:
-            return False
+            return []
 
         rtn = []
 
@@ -77,9 +77,12 @@ class Query:
     # Returns False if no records exist with given key or if the target record cannot be accessed due to 2PL locking
     """
     def update(self, primary_key, *columns):
-        rid = self.table.index.locate(self.table.key, primary_key)[0]
+        rid = self.table.index.locate(self.table.key, primary_key)
 
-        return self.table.update_record(rid, columns)
+        if rid == False:
+            return False
+
+        return self.table.update_record(rid[0], columns)
 
     
     """

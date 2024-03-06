@@ -192,17 +192,17 @@ class Table:
         self.index.delete_rid(rid, input_data)
         self.index.insert_record(rid, input_data)
 
-        # Append the full tail page to the queue and initiate merging once size of queue pass max size
-        if target_tail_num_records == config.PAGE_MAX_ROWS:
-            if page_range_index in self.tail_page_merge_stack:
-                self.tail_page_merge_stack[page_range_index].append(final_tail_page_index + config.PAGE_RANGE)
-            else:
-                self.tail_page_merge_stack[page_range_index] = [final_tail_page_index + config.PAGE_RANGE]
+        # # Append the full tail page to the queue and initiate merging once size of queue pass max size
+        # if target_tail_num_records == config.PAGE_MAX_ROWS:
+        #     if page_range_index in self.tail_page_merge_stack:
+        #         self.tail_page_merge_stack[page_range_index].append(final_tail_page_index + config.PAGE_RANGE)
+        #     else:
+        #         self.tail_page_merge_stack[page_range_index] = [final_tail_page_index + config.PAGE_RANGE]
 
-            if len(self.tail_page_merge_stack[page_range_index]) == config.MERGE_STACK_SIZE:
-                merge_thread = threading.Thread(target = self.merge, args=(page_range_index,))
-                merge_thread.start()
-                # self.merge(page_range_index)
+        #     if len(self.tail_page_merge_stack[page_range_index]) == config.MERGE_STACK_SIZE:
+        #         merge_thread = threading.Thread(target = self.merge, args=(page_range_index,))
+        #         merge_thread.start()
+        #         # self.merge(page_range_index)
 
         return True
 
@@ -270,7 +270,7 @@ class Table:
 
     def add_base_page(self):
         # If no existing page range or current page range is full of base page, create new page range
-        if not self.db.page_table or len(self.db.page_table[str(len(self.db.page_table)-1)]) == config.PAGE_RANGE:
+        if not self.db.page_table or len(self.db.page_table[str(len(self.db.page_table)-1)]["base_pages"]) == config.PAGE_RANGE:
             self.db.page_table[str(len(self.db.page_table))] = {"base_pages": {}, "tail_pages": {}}
             self.db.page_TPS[str(len(self.db.page_table) - 1)] = {}
 
@@ -292,7 +292,7 @@ class Table:
             tail_baseID_page = self.db.get_page(page_range_index, tail_page_index, config.BASE_ID_COLUMN)
             for baseID in tail_baseID_page.rows:
                 base_rid_set.add(baseID)
-                base_page_set.add(self.parseIndirection(baseID))
+                base_page_set.add(self.parseBasePageRID(baseID))
             tail_baseID_page.pin -= 1
         
         # Load copies of needed base_pages
