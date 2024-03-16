@@ -26,6 +26,10 @@ class TransactionWorker:
     def run(self):
         pass
         # here you need to create a thread and call __run
+        # todo: create a thread
+        
+        self.__run()
+        
     
 
     """

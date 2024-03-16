@@ -12,19 +12,20 @@ class Query:
     def __init__(self, table):
         self.table = table
     
+    
     """
     # internal Method
     # Read a record with specified RID
     # Returns True upon succesful deletion
     # Return False if record doesn't exist or is locked due to 2PL
     """
-    def delete(self, primary_key):
+    def delete(self, transaction, primary_key):
         rid = self.table.index.locate(self.table.key, primary_key)
 
         if not rid:
             return False
         
-        self.table.delete_record(rid[0])
+        self.table.delete_record(transaction, rid[0])
         return True
     
     """
@@ -32,8 +33,8 @@ class Query:
     # Return True upon succesful insertion
     # Returns False if insert fails for whatever reason
     """
-    def insert(self, *columns):
-        return self.table.add_record(columns)
+    def insert(self, transaction, *columns):
+        return self.table.add_record(transaction, columns)
         
     """
     # Read matching record with specified search key
@@ -76,13 +77,13 @@ class Query:
     # Returns True if update is succesful
     # Returns False if no records exist with given key or if the target record cannot be accessed due to 2PL locking
     """
-    def update(self, primary_key, *columns):
+    def update(self, transaction, primary_key, *columns):
         rid = self.table.index.locate(self.table.key, primary_key)
 
         if rid == False:
             return False
 
-        return self.table.update_record(rid[0], columns)
+        return self.table.update_record(transaction, rid[0], columns)
 
     
     """

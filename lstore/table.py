@@ -30,7 +30,7 @@ class Table:
     def get_time(self):
         return int(time())
 
-    def add_record(self, input_data):
+    def add_record(self, transaction, input_data): #This will write to a page in the bufferpool
         # Existing record with the same key, so forbid adding a duplicate record
         if input_data[self.key] in self.index.indices[self.key]:
             return False
@@ -38,7 +38,7 @@ class Table:
         # Get to the first empty record inside a bottomost page range's bottomost base page
         final_page_range = len(self.db.page_table) - 1
 
-        self.lock.acquire()
+        # self.lock.acquire() #was for merging
 
         if final_page_range >= 0:
             final_base_page_index = len(self.db.page_table[str(final_page_range)]["base_pages"]) - 1
@@ -53,34 +53,36 @@ class Table:
             final_base_page_index = len(self.db.page_table[str(final_page_range)]["base_pages"]) - 1
             final_row_num = 0
 
+        # Getting the page in the bufferpool
         # Indirection
         indirection_page = self.db.get_page(final_page_range, final_base_page_index, config.INDIRECTION_COLUMN)
         indirection_page.add_record(self.encode_indirection(final_base_page_index, final_row_num))  
-        indirection_page.pin -= 1
+        # indirection_page.pin -= 1
 
         # Timestamp
         timestamp_page = self.db.get_page(final_page_range, final_base_page_index, config.TIMESTAMP_COLUMN)
         timestamp_page.add_record(self.get_time())
-        timestamp_page.pin -= 1
+        # timestamp_page.pin -= 1
         
         # Schema encoding
         schema_page = self.db.get_page(final_page_range, final_base_page_index, config.SCHEMA_ENCODING_COLUMN)
         schema_page.add_record(0)
-        schema_page.pin -= 1
+        # schema_page.pin -= 1
 
         # Add the data value to respective columns
         for i in range(config.METACOLUMN_NUM, self.num_columns + config.METACOLUMN_NUM):
             data_page = self.db.get_page(final_page_range, final_base_page_index, i)
             data_page.add_record(input_data[i - config.METACOLUMN_NUM])
-            data_page.pin -= 1
+            # data_page.pin -= 1
 
-        self.lock.release()
+        # self.lock.release() #was for merging
 
         rid = self.encode_RID(final_page_range, final_base_page_index, final_row_num)
+        transaction.logger.append([rid])
         self.index.insert_record(rid, input_data)
         return True
 
-    def update_record(self, rid, input_data, layer = 0):
+    def update_record(self, transaction, rid, input_data, layer = 0):
         # Existing record with the same key, so forbid adding a duplicate record
         if input_data[self.key] in self.index.indices[self.key] and self.index.indices[self.key][input_data[self.key]] != rid:
             return False
@@ -89,7 +91,9 @@ class Table:
         base_page_index = self.parseBasePageRID(rid)
         page_offset = self.parseRecord(rid)
 
-        self.lock.acquire()
+        transaction.logger.append([rid]) # append base_rid to logger
+
+        #self.lock.acquire() #was for merging
 
         # Backup the original data if updated for the first time
         base_schema_page = self.db.get_page(page_range_index, base_page_index, config.SCHEMA_ENCODING_COLUMN)
@@ -103,12 +107,12 @@ class Table:
             else:
                 old_values.append(None)
 
-        self.lock.release()
+        #self.lock.release() #was for merging
 
         if layer == 0 and old_values != [None] * self.num_columns:
             self.update_record(rid, old_values, 1)
 
-        self.lock.acquire()
+        #self.lock.acquire() #was for merging
 
         final_tail_page_index = len(self.db.page_table[str(page_range_index)]["tail_pages"]) - 1
 
@@ -130,8 +134,15 @@ class Table:
         base_indirection_page = self.db.get_page(page_range_index, base_page_index, config.INDIRECTION_COLUMN)
         previous_indirection = base_indirection_page[page_offset]
 
+        transaction.logger.append([previous_indirection]) # append old_tail_rid to logger
+
         # Update base record's indirection to point to the new tail record to be added
         base_indirection_page[page_offset] = self.encode_indirection(final_tail_page_index + config.PAGE_RANGE, final_tail_page.get_num_record())
+        
+        updated_base_indirection_page = self.db.get_page(page_range_index, base_page_index, config.INDIRECTION_COLUMN)
+        latest_indirection = updated_base_indirection_page[page_offset]
+        transaction.logger.append([latest_indirection]) # append latest_tail_rid to logger
+        
         final_tail_page.pin -= 1
         base_indirection_page.pin -= 1
 
@@ -186,7 +197,7 @@ class Table:
         target_tail_num_records = target_schema_page.get_num_record()
         target_schema_page.pin -= 1
 
-        self.lock.release()
+        #self.lock.release() #was for merging
 
         # Update the indexes to reflect changes to this record
         self.index.delete_rid(rid, input_data)
@@ -211,7 +222,7 @@ class Table:
         base_page_index = self.parseBasePageRID(rid)
         page_offset = self.parseRecord(rid)
 
-        self.lock.acquire()
+        #self.lock.acquire() #was for merging
 
         # Points to the latest tail record
         base_indirection_page = self.db.get_page(page_range_index, base_page_index, config.INDIRECTION_COLUMN)
@@ -247,23 +258,27 @@ class Table:
                     rtn_record.append(base_data_page[page_offset])
                     base_data_page.pin -= 1
 
-        self.lock.release()
+        #self.lock.release() #was for merging
 
         return rtn_record
 
-    def delete_record(self, rid):
+    def delete_record(self, transaction, rid):
         page_range_index = self.parsePageRangeRID(rid)
         base_page_index = self.parseBasePageRID(rid)
         page_offset = self.parseRecord(rid)
 
-        self.lock.acquire()
+        #self.lock.acquire() #was for merging
+
+        transaction.logger.append([rid]) # append base_rid to logger
 
         # Sets indirection of base record to NULL_VAL to imply deletion
         base_indirection_page = self.db.get_page(page_range_index, base_page_index, config.INDIRECTION_COLUMN)
-        base_indirection_page[page_offset] = config.NULL_VAL
+        
+        transaction.logger.append([base_indirection_page[page_offset]]) # append latest_tail_rid to logger
+        base_indirection_page[page_offset] = config.NULL_VAL # set indirection to null indicating deletion
         base_indirection_page.pin -= 1
 
-        self.lock.release()
+        #self.lock.release() #was for merging
 
         # Remove the rid of this record from index
         self.index.delete_rid(rid, [1] * self.num_columns)
@@ -284,7 +299,7 @@ class Table:
         base_rid_set = set()
         base_page_set = set()
 
-        self.lock.acquire()
+        self.lock.acquire() 
 
         # Obtain list of rids and base pages to merge
         for i in range(config.MERGE_STACK_SIZE):
