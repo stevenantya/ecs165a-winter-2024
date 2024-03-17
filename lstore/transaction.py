@@ -81,7 +81,7 @@ class Transaction:
 
             #todo: Ethan. Unlock records
             
-            #todo: Ethan. Unlock page range
+            #todo: Ethan. Unlock page range -> unfamiliar with page range logic
 
         return False
 
@@ -92,9 +92,19 @@ class Transaction:
     if i run this sequentially, all of this will be evicted not at the same time
     '''
     def commit(self):
-        #todo: Ethan. Unlock records
+        #todo: Ethan. Unlock records -> Not sure if below code works/is correct
         
-        #todo: Ethan. Unlock page range
+        #todo: Ethan. Unlock page range -> unfamiliar with page range logic
 
+        for query, args in self.queries:
+            rid = args[0]
+            if query.__name__ == 'delete':
+                del self.table.lock_manager[rid]
+            elif query.__name__ == 'insert':
+                continue
+            elif query.__name__ == 'update':
+                self.table.lock_manager[rid].release_exclusive_lock
+            else:
+                self.table.lock_manager[rid].release_shared_lock
         return True
 
