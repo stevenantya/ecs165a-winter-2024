@@ -21,7 +21,8 @@ class Query:
     """
     def delete(self, transaction, primary_key):
         rid = self.table.index.locate(self.table.key, primary_key)
-
+        transaction.logger_counter = 2
+        
         if not rid:
             return False
         
@@ -34,6 +35,7 @@ class Query:
     # Returns False if insert fails for whatever reason
     """
     def insert(self, transaction, *columns):
+        transaction.logger_counter = 1
         return self.table.add_record(transaction, columns)
         
     """
@@ -79,7 +81,7 @@ class Query:
     """
     def update(self, transaction, primary_key, *columns):
         rid = self.table.index.locate(self.table.key, primary_key)
-
+        transaction.logger_counter = 3
         if rid == False:
             return False
 

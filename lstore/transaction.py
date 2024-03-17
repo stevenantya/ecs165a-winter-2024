@@ -10,6 +10,7 @@ class Transaction:
     def __init__(self):
         self.queries = []
         self.logger = [] 
+        self.logger_counter = 0
         self.transaction_manager = 0 # 0 for fail, 1 for fail&move-on, 2 for success
         pass
 
@@ -29,12 +30,13 @@ class Transaction:
     def run(self):
         for query, args in self.queries:
             print(query, args) # Query objects
-
+            self.logger_counter = 0
             tupleSelf = tuple([self])
             args = tupleSelf + args
 
             result = query(*args) #this is executing the query #PASSING TRANSACTION OBJECT ALONG IN THE ARGS TODO: EDIT ALL QUERIES AND TABLES
-            latest_log = self.logger[-1]
+
+            latest_log = self.logger[-(self.logger_counter):]
             # write logger to disk
             with open('ECS165/logger.txt', 'a') as log:
                 str_log = ','.join(str(e) for e in latest_log)
