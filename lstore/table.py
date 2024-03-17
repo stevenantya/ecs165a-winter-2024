@@ -5,6 +5,7 @@ from .page import Page
 from . import config
 import math
 import threading
+from . rwlock import RWLock
 
 class Record:
 
@@ -21,7 +22,7 @@ class Table:
         self.num_columns = num_columns
         self.tail_page_merge_stack = {}
         self.index = Index(self)
-
+        self.lock_manager = {}
         self.lock = threading.Lock()
 
     def __del__(self):
@@ -86,6 +87,16 @@ class Table:
         # Existing record with the same key, so forbid adding a duplicate record
         if input_data[self.key] in self.index.indices[self.key] and self.index.indices[self.key][input_data[self.key]] != rid:
             return False
+        
+        # Checks if lock can be accessed
+        if (self.lock_manager[rid] == None):
+                self.lock_manager[rid] = RWLock()
+                self.lock_manager[rid].acquire_exclusive_lock()
+        else:
+            lock_status = self.lock_manager[rid].acquire_exclusive_lock()
+            if lock_status == False:
+                return False
+              
 
         page_range_index = self.parsePageRangeRID(rid)
         base_page_index = self.parseBasePageRID(rid)
@@ -218,6 +229,15 @@ class Table:
         return True
 
     def get_record(self, rid, projected_columns_index, version):
+        # Checks if lock can be accessed
+        if (self.lock_manager[rid] == None):
+                self.lock_manager[rid] = RWLock()
+                self.lock_manager[rid].acquire_shared_lock()
+        else:
+            lock_status = self.lock_manager[rid].acquire_shared_lock()
+            if lock_status == False:
+                return False
+            
         page_range_index = self.parsePageRangeRID(rid)
         base_page_index = self.parseBasePageRID(rid)
         page_offset = self.parseRecord(rid)
@@ -263,6 +283,15 @@ class Table:
         return rtn_record
 
     def delete_record(self, transaction, rid):
+        # Checks if lock can be accessed
+        if (self.lock_manager[rid] == None):
+                self.lock_manager[rid] = RWLock()
+                self.lock_manager[rid].acquire_exclusive_lock()
+        else:
+            lock_status = self.lock_manager[rid].acquire_exclusive_lock()
+            if lock_status == False:
+                return False
+            
         page_range_index = self.parsePageRangeRID(rid)
         base_page_index = self.parseBasePageRID(rid)
         page_offset = self.parseRecord(rid)
