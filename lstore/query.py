@@ -22,7 +22,7 @@ class Query:
     def delete(self, transaction, primary_key):
         rid = self.table.index.locate(self.table.key, primary_key)
         transaction.logger_counter = 2
-        
+        transaction.logger.append([])
         if not rid:
             return False
         
@@ -36,6 +36,7 @@ class Query:
     """
     def insert(self, transaction, *columns):
         transaction.logger_counter = 1
+        transaction.logger.append([])
         return self.table.add_record(transaction, columns)
         
     """
@@ -82,6 +83,7 @@ class Query:
     def update(self, transaction, primary_key, *columns):
         rid = self.table.index.locate(self.table.key, primary_key)
         transaction.logger_counter = 3
+        transaction.logger.append([])
         if rid == False:
             return False
 

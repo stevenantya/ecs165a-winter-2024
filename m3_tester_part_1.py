@@ -41,7 +41,7 @@ for i in range(number_of_transactions):
     insert_transactions.append(Transaction())
 
 for i in range(0, number_of_records):
-    key = 100014 + i
+    key = 100024 + i
     keys.append(key)
     records[key] = [key, randint(i * 20, (i + 1) * 20), randint(i * 20, (i + 1) * 20), randint(i * 20, (i + 1) * 20), randint(i * 20, (i + 1) * 20)]
     t = insert_transactions[i % number_of_transactions]

@@ -68,10 +68,29 @@ class Transaction:
             # UPDATE THE -> MAKE THE NEW TAIL RECORD POINT TO NULL, MAKE THE BASE RECORD POINT TO THE OLD TAIL RECORD
             
             # Case 1 - ADD NEW RECORD OK
+            if len(self.logger[index]) == 1:
+                b_rid = self.logger[index][0]
+                query.table.delete_record(b_rid)
+
 
             # Case 2 - DELETE RECORD OK
 
+            if len(self.logger[index]) == 2:
+                b_rid = self.logger[index][0]
+                lrid = self.logger[index][1]
+                query.table.update_record()
+
+
+
+
             # Case 3 - UPDATE RECORD 
+
+            if len(self.logger[index]) == 3:
+                b_rid = self.logger[index][0]
+                otr = self.logger[index][1]
+                ntr = self.logger[index][2]
+                query.table
+
             '''
             Q1(INSERT) -> Q2(DELETE) -> Q2(UPDATE) 
 

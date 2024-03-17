@@ -79,7 +79,7 @@ class Table:
         # self.lock.release() #was for merging
 
         rid = self.encode_RID(final_page_range, final_base_page_index, final_row_num)
-        transaction.logger.append([rid])
+        transaction.logger[-1].append(rid)
         self.index.insert_record(rid, input_data)
         return True
 
@@ -102,7 +102,7 @@ class Table:
         base_page_index = self.parseBasePageRID(rid)
         page_offset = self.parseRecord(rid)
 
-        transaction.logger.append([rid]) # append base_rid to logger
+        transaction.logger[-1].append(rid) # append base_rid to logger
 
         #self.lock.acquire() #was for merging
 
@@ -145,14 +145,14 @@ class Table:
         base_indirection_page = self.db.get_page(page_range_index, base_page_index, config.INDIRECTION_COLUMN)
         previous_indirection = base_indirection_page[page_offset]
 
-        transaction.logger.append([previous_indirection]) # append old_tail_rid to logger
+        transaction.logger[-1].append(previous_indirection) # append old_tail_rid to logger
 
         # Update base record's indirection to point to the new tail record to be added
         base_indirection_page[page_offset] = self.encode_indirection(final_tail_page_index + config.PAGE_RANGE, final_tail_page.get_num_record())
         
         updated_base_indirection_page = self.db.get_page(page_range_index, base_page_index, config.INDIRECTION_COLUMN)
         latest_indirection = updated_base_indirection_page[page_offset]
-        transaction.logger.append([latest_indirection]) # append latest_tail_rid to logger
+        transaction.logger[-1].append(latest_indirection) # append latest_tail_rid to logger
         
         final_tail_page.pin -= 1
         base_indirection_page.pin -= 1
@@ -298,12 +298,12 @@ class Table:
 
         #self.lock.acquire() #was for merging
 
-        transaction.logger.append([rid]) # append base_rid to logger
+        transaction.logger[-1].append(rid) # append base_rid to logger
 
         # Sets indirection of base record to NULL_VAL to imply deletion
         base_indirection_page = self.db.get_page(page_range_index, base_page_index, config.INDIRECTION_COLUMN)
         
-        transaction.logger.append([base_indirection_page[page_offset]]) # append latest_tail_rid to logger
+        transaction.logger[-1].append(base_indirection_page[page_offset]) # append latest_tail_rid to logger
         base_indirection_page[page_offset] = config.NULL_VAL # set indirection to null indicating deletion
         base_indirection_page.pin -= 1
 
