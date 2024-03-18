@@ -56,9 +56,18 @@ class Transaction:
     def abort(self):
         #TODO: do roll-back and any other necessary operations
 
-        for index, (query, args) in enumerate(reversed(self.queries)):
-            if self.logger[index] == False: # if the query has not been executed, then we don't need to do UNDO changes
+        dummy_t = Transaction()
+
+        for index, log in enumerate(reversed(self.logger)):
+            if log[index] == False: # if the query has not been executed, then we don't need to do UNDO changes
                 continue
+
+            cur_query = self.queries[len(self.logger)-index]
+
+            cur_table = cur_query.table
+
+            cur_db = cur_table.db
+
 
             # todo: ALEX do the roll-backs here
             # Keep track what record has been altered
@@ -68,31 +77,56 @@ class Transaction:
             # UPDATE THE -> MAKE THE NEW TAIL RECORD POINT TO NULL, MAKE THE BASE RECORD POINT TO THE OLD TAIL RECORD
             
             # Case 1 - ADD NEW RECORD OK
-            if len(self.logger[index]) == 1:
-                b_rid = self.logger[index][0]
-                query.table.delete_record(b_rid)
+            if len(log[index]) == 1:
+                b_rid = log[index][0]
 
+                cur_table.delete_record(dummy_t, b_rid)
 
             # Case 2 - DELETE RECORD OK
 
-            if len(self.logger[index]) == 2:
-                b_rid = self.logger[index][0]
-                lrid = self.logger[index][1]
-                query.table.update_record()
+            if len(log[index]) == 2:
+                b_rid = log[index][0]
+                l_tid = log[index][1]
 
+                b_pi = cur_table.parsePageRangeRID(b_rid)
+                b_p  = cur_table.parseBasePageRID(b_rid)
+                b_pg = cur_table.parseRecord(b_rid)
 
+                base_indirection_page = cur_db.get_page(b_pi, b_p, 0)
 
+                base_indirection_page[b_pg] = l_tid
 
             # Case 3 - UPDATE RECORD 
 
-            if len(self.logger[index]) == 3:
-                b_rid = self.logger[index][0]
-                otr = self.logger[index][1]
-                ntr = self.logger[index][2]
-                query.table
+            if len(log[index]) == 3:
+                b_rid = log[index][0]
+                o_tid = log[index][1]
+                n_tid = log[index][2]
+
+                b_pi = cur_table.parsePageRangeRID(b_rid)
+                b_p  = cur_table.parseBasePageRID(b_rid)
+                b_pg = cur_table.parseRecord(b_rid)
+
+                base_indirection_page = cur_db.get_page(b_pi, b_p, 0)
+
+                base_indirection_page[b_pg] = o_tid
+
+                t_pi = cur_table.parsePageRangeRID(n_tid)
+                t_p  = cur_table.parseBasePageRID(n_tid)
+                t_pg = cur_table.parseRecord(n_tid)
+
+                tail_indirection_page = cur_db.get_page(t_pi, t_p, 0)
+                
+                tail_indirection_page[t_pg] = None
+
+                # find the record with the correspond b_rid
+                # change the indirection column to point to o_tid
+                # change the n_tid to point to NULL
+
+
 
             '''
-            Q1(INSERT) -> Q2(DELETE) -> Q2(UPDATE) 
+            Q1(INSERT) -> Q2(DELETE) -> Q3(UPDATE) 
 
             logger = [[BASE_RID], [BASE_RID, LATEST_TAIL_RID] , [BASE_RID, OLD_TAIL_RID, NEW_TAIL_RID]]
             '''
