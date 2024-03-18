@@ -30,6 +30,34 @@ class Table:
 
     def get_time(self):
         return int(time())
+    
+    def undo_delete(self, b_rid, l_tid):
+        b_pi = self.parsePageRangeRID(b_rid)
+        b_p  = self.parseBasePageRID(b_rid)
+        b_pg = self.parseRecord(b_rid)
+        base_indirection_page = self.db.get_page(b_pi, b_p, 0)
+        base_indirection_page[b_pg] = l_tid
+    
+    def undo_update(self, b_rid, o_tid, n_tid):
+        b_pi = self.parsePageRangeRID(b_rid)
+        b_p  = self.parseBasePageRID(b_rid)
+        b_pg = self.parseRecord(b_rid)
+
+        base_indirection_page = self.db.get_page(b_pi, b_p, 0)
+        
+        base_indirection_page[b_pg] = o_tid
+
+        t_pi = self.parsePageRangeRID(n_tid)
+        t_p  = self.parseBasePageRID(n_tid)
+        t_pg = self.parseRecord(n_tid)
+
+        tail_indirection_page = self.db.get_page(t_pi, t_p, 0)
+        tail_indirection_page[t_pg] = None
+
+        # find the record with the correspond b_rid
+        # change the indirection column to point to o_tid
+        # change the n_tid to point to NULL
+
 
     def add_record(self, transaction, input_data): #This will write to a page in the bufferpool
         # Existing record with the same key, so forbid adding a duplicate record

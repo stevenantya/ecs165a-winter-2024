@@ -22,13 +22,13 @@ class Transaction:
     # t.add_query(q.update, grades_table, 0, *[None, 1, None, 2, None])
     """
     def add_query(self, query, table, *args):
-        self.queries.append((query, args))
+        self.queries.append((query, table, args))
         # use grades_table for aborting
 
         
     # If you choose to implement this differently this method must still return True if transaction commits or False on abort
     def run(self):
-        for query, args in self.queries:
+        for query, table, args in self.queries:
             #print(query, args) # Query objects
             self.logger_counter = 0
             tupleSelf = tuple([self])
@@ -59,14 +59,12 @@ class Transaction:
         dummy_t = Transaction()
 
         for index, log in enumerate(reversed(self.logger)):
-            if log[index] == False: # if the query has not been executed, then we don't need to do UNDO changes
-                continue
 
-            cur_query = self.queries[len(self.logger)-index]
+            cur_query = self.queries[len(self.logger)-1-index]
 
-            cur_table = cur_query.table
+            cur_table = cur_query[1]
 
-            cur_db = cur_table.db
+            # cur_db = cur_table.db
 
 
             # todo: ALEX do the roll-backs here
@@ -77,52 +75,26 @@ class Transaction:
             # UPDATE THE -> MAKE THE NEW TAIL RECORD POINT TO NULL, MAKE THE BASE RECORD POINT TO THE OLD TAIL RECORD
             
             # Case 1 - ADD NEW RECORD OK
-            if len(log[index]) == 1:
-                b_rid = log[index][0]
+            if len(log) == 1:
+                b_rid = log[0]
 
                 cur_table.delete_record(dummy_t, b_rid)
 
             # Case 2 - DELETE RECORD OK
 
-            if len(log[index]) == 2:
-                b_rid = log[index][0]
-                l_tid = log[index][1]
-
-                b_pi = cur_table.parsePageRangeRID(b_rid)
-                b_p  = cur_table.parseBasePageRID(b_rid)
-                b_pg = cur_table.parseRecord(b_rid)
-
-                base_indirection_page = cur_db.get_page(b_pi, b_p, 0)
-
-                base_indirection_page[b_pg] = l_tid
+            if len(log) == 2:
+                b_rid = log[0]
+                l_tid = log[1]
+                cur_table.undo_delete(b_rid, l_tid)
 
             # Case 3 - UPDATE RECORD 
 
-            if len(log[index]) == 3:
-                b_rid = log[index][0]
-                o_tid = log[index][1]
-                n_tid = log[index][2]
+            if len(log) == 3:
+                b_rid = log[0]
+                o_tid = log[1]
+                n_tid = log[2]
 
-                b_pi = cur_table.parsePageRangeRID(b_rid)
-                b_p  = cur_table.parseBasePageRID(b_rid)
-                b_pg = cur_table.parseRecord(b_rid)
-
-                base_indirection_page = cur_db.get_page(b_pi, b_p, 0)
-
-                base_indirection_page[b_pg] = o_tid
-
-                t_pi = cur_table.parsePageRangeRID(n_tid)
-                t_p  = cur_table.parseBasePageRID(n_tid)
-                t_pg = cur_table.parseRecord(n_tid)
-
-                tail_indirection_page = cur_db.get_page(t_pi, t_p, 0)
-                
-                tail_indirection_page[t_pg] = None
-
-                # find the record with the correspond b_rid
-                # change the indirection column to point to o_tid
-                # change the n_tid to point to NULL
-
+                cur_table.undo_update(b_rid, o_tid, n_tid)
 
 
             '''
@@ -132,20 +104,23 @@ class Transaction:
             '''
 
 
-            #todo: Ethan. Unlock records
+        #todo: Ethan. Unlock records
             
-            #todo: Ethan. Unlock page range -> unfamiliar with page range logic
-        for query, args in self.queries:
-                rid = args[0]
-                
-                if query.__name__ == 'delete':
-                    del self.table.lock_manager[rid]
-                elif query.__name__ == 'insert':
-                    continue
-                elif query.__name__ == 'update':
-                    self.table.lock_manager[rid].release_exclusive_lock
-                else:
-                    self.table.lock_manager[rid].release_shared_lock
+        #todo: Ethan. Unlock page range -> unfamiliar with page range logic
+        for query_tuple in self.queries:
+            # self.queries.append((query, table, args))
+            args = query_tuple[2]
+            query = query_tuple[0]
+            rid = args[0]
+            
+            if query.__name__ == 'delete':
+                del self.table.lock_manager[rid]
+            elif query.__name__ == 'insert':
+                continue
+            elif query.__name__ == 'update':
+                self.table.lock_manager[rid].release_exclusive_lock
+            else:
+                self.table.lock_manager[rid].release_shared_lock
 
         return False
 
