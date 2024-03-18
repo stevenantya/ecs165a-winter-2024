@@ -81,6 +81,9 @@ class Table:
         rid = self.encode_RID(final_page_range, final_base_page_index, final_row_num)
         transaction.logger[-1].append(rid)
         self.index.insert_record(rid, input_data)
+
+        # Add new record to lock manager
+        self.lock_manager[rid] = RWLock()
         return True
 
     def update_record(self, transaction, rid, input_data, layer = 0):
@@ -89,14 +92,16 @@ class Table:
             return False
         
         # Checks if lock can be accessed
-        if (self.lock_manager[rid] == None):
+        if (rid not in self.lock_manager):
+                self.lock_manager[rid] = RWLock()
+                self.lock_manager[rid].acquire_exclusive_lock()
+        elif (self.lock_manager[rid] == None):
                 self.lock_manager[rid] = RWLock()
                 self.lock_manager[rid].acquire_exclusive_lock()
         else:
             lock_status = self.lock_manager[rid].acquire_exclusive_lock()
             if lock_status == False:
                 return False
-              
 
         page_range_index = self.parsePageRangeRID(rid)
         base_page_index = self.parseBasePageRID(rid)
@@ -230,7 +235,11 @@ class Table:
 
     def get_record(self, rid, projected_columns_index, version):
         # Checks if lock can be accessed
-        if (self.lock_manager[rid] == None):
+                # Checks if lock can be accessed
+        if (rid not in self.lock_manager):
+                self.lock_manager[rid] = RWLock()
+                self.lock_manager[rid].acquire_shared_lock()
+        elif (self.lock_manager[rid] == None):
                 self.lock_manager[rid] = RWLock()
                 self.lock_manager[rid].acquire_shared_lock()
         else:
@@ -284,7 +293,10 @@ class Table:
 
     def delete_record(self, transaction, rid):
         # Checks if lock can be accessed
-        if (self.lock_manager[rid] == None):
+        if (rid not in self.lock_manager):
+                self.lock_manager[rid] = RWLock()
+                self.lock_manager[rid].acquire_exclusive_lock()
+        elif (self.lock_manager[rid] == None):
                 self.lock_manager[rid] = RWLock()
                 self.lock_manager[rid].acquire_exclusive_lock()
         else:
