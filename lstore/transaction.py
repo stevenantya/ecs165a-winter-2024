@@ -101,6 +101,17 @@ class Transaction:
             #todo: Ethan. Unlock records
             
             #todo: Ethan. Unlock page range -> unfamiliar with page range logic
+        for query, args in self.queries:
+                rid = args[0]
+                print(rid)
+                if query.__name__ == 'delete':
+                    del self.table.lock_manager[rid]
+                elif query.__name__ == 'insert':
+                    continue
+                elif query.__name__ == 'update':
+                    self.table.lock_manager[rid].release_exclusive_lock
+                else:
+                    self.table.lock_manager[rid].release_shared_lock
 
         return False
 
