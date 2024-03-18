@@ -29,7 +29,7 @@ class Transaction:
     # If you choose to implement this differently this method must still return True if transaction commits or False on abort
     def run(self):
         for query, args in self.queries:
-            print(query, args) # Query objects
+            #print(query, args) # Query objects
             self.logger_counter = 0
             tupleSelf = tuple([self])
             args = tupleSelf + args
@@ -45,7 +45,7 @@ class Transaction:
 
             # put the old_metadata and new_metadata into the query_executed
 
-            print(result)
+            #print(result)
             # LOCK here if you want to do along the way~
             # If the query has failed the transaction should abort
             if result == False:
@@ -137,7 +137,7 @@ class Transaction:
             #todo: Ethan. Unlock page range -> unfamiliar with page range logic
         for query, args in self.queries:
                 rid = args[0]
-                print(rid)
+                
                 if query.__name__ == 'delete':
                     del self.table.lock_manager[rid]
                 elif query.__name__ == 'insert':

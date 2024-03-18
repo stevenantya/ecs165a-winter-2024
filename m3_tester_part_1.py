@@ -17,10 +17,10 @@ query = Query(grades_table)
 # dictionary for records to test the database: test directory
 records = {}
 
-number_of_records = 2
-number_of_transactions = 2
-# num_threads = 8
-num_threads = 1
+number_of_records = 1000
+number_of_transactions = 100
+number_of_operations_per_record = 10
+num_threads = 8
 
 # create index on the non primary columns
 try:
@@ -41,7 +41,7 @@ for i in range(number_of_transactions):
     insert_transactions.append(Transaction())
 
 for i in range(0, number_of_records):
-    key = 100024 + i
+    key = 100200 + i
     keys.append(key)
     records[key] = [key, randint(i * 20, (i + 1) * 20), randint(i * 20, (i + 1) * 20), randint(i * 20, (i + 1) * 20), randint(i * 20, (i + 1) * 20)]
     t = insert_transactions[i % number_of_transactions]
@@ -64,7 +64,7 @@ for i in range(num_threads):
 for i in range(num_threads):
     transaction_workers[i].join()
 
-'''
+
 # Check inserted records using select query in the main thread outside workers
 for key in keys:
     record = query.select(key, 0, [1, 1, 1, 1, 1])[0]
@@ -78,5 +78,5 @@ for key in keys:
         pass
         # print('select on', key, ':', record)
 print("Select finished")
-'''
+
 db.close()
